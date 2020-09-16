@@ -1,0 +1,192 @@
+
+<script type="text/javascript">
+        $(document).ready(function () {    
+           var loadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div>';
+           var actionbutton = '<button class="btn btn-light" id ="configedit" ><li class="fa fa-file-alt"></li></button>';
+           var table = $('#allinstance_table').DataTable({
+                responsive: true,
+                "oLanguage": {
+                "sLengthMenu": "每頁顯示 _MENU_ 條",
+                "sProcessing": "<img src='" + loadinghtml + "'/><span>&nbsp;&nbsp;Loading...</span>",
+                "sInfo": "從 _START_ 到 _END_, 共 _TOTAL_ 條記錄",
+                "sInfoEmpty": "",
+                "sGroupActions": "_TOTAL_ records selected:  ",
+                "sAjaxRequestGeneralError": "未能連線伺服器，請重試！",
+                "sEmptyTable": "未找到相關記錄",
+                "sZeroRecords": "共 0 條記錄",
+                "sInfoFiltered": "(從 _MAX_ 條資料中檢索)",
+                "oPaginate": {
+                    "sPrevious": "上一頁",
+                    "sNext": "下一頁",
+                    "sPage": "頁",
+                    "sPageOf": "of"
+                },
+                "sSearch": "搜尋",
+            },
+            "bFilter": true, //搜尋欄
+            "initComplete": function () { 
+                this.api().columns().every( function () {
+                    var column = this;
+                    var header = column.header();
+                    var title = $(header).text().trim();
+                    if(title !='Actions'){
+                    var select = $('<select><option value=""></option></select>')
+                        .appendTo( $(column.header()) )
+                        .on( 'change', function () {
+                            var val = $.fn.dataTable.util.escapeRegex(
+                                $(this).val()
+                            );
+                            column
+                                .search( val ? '^'+val+'$' : '', true, false )
+                                .draw();
+                        } );
+    
+                    column.data().unique().sort().each( function ( d, j ) {
+                        select.append( '<option value="'+d+'">'+d+'</option>' )
+                    } );
+                    }
+                } );
+                         
+            },
+             'columnDefs': 
+                [
+                    { 'width':'10%' ,'targets': 7,"data": null,"defaultContent": actionbutton, "className": 'details-control','searchable': false,'orderable': false},
+                    
+                ],
+                order: [[ 1, 'asc' ]]
+            });     
+            $('#allinstance_table tbody').on( 'click', 'button', function () {
+                if(gtoken!=null)
+                {
+                    var tr = $(this).parents('tr');
+                    var row = table.row( tr );
+                    instance_edit(row);
+                }
+                else{
+                    getContent();
+                }
+            } )
+    })
+    function instance_add(){
+            $("#instancetitle").html('New instance');
+            $("#instance_nid").val("")
+            $("#instance_region").val("")
+            $("#instance_isp").val("")
+            $("#instance_hostname").val("")
+            $("#instance_name").val("")
+            $("#instance_hostip").val("")
+            $("#instance_status").val("")
+            $('#instanceModal').modal('show');
+    }
+    function instance_edit(row){
+            var instance_id = row.id();
+            var data = row.data();
+            $("#instance_nid").val(data[0])
+            $("#instance_region option").filter(function() {
+                return this.text == data[1]; 
+            }).attr('selected', true);
+            $("#instance_isp option").filter(function() {
+                return this.text == data[2]; 
+            }).attr('selected', true);
+            $("#instance_hostname").val(data[3])
+            $("#instance_name").val(data[4])
+            $("#instance_hostip").val(data[5])
+            $("#instance_status").val(data[6])
+            $("#instancetitle").html('Edit instance');
+            $('#instanceModal').modal('show');
+    }
+
+</script>
+<style type="text/css">
+</style>
+
+<div class="container-fluid">
+   <div class="toolbar">
+        <button class="btn btn-secondary" id='instanceadd' onclick="instance_add()"><li class="fa fa-plus"></li> </button>
+    </div>
+    <div id ="allinstance_content" class="table-responsive">
+        <table id = 'allinstance_table' class="table table-bordered" width="100%" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Nid</th>
+                    <th>Region</th>
+                    <th>ISP</th>
+                    <th>HostName</th>
+                    <th>Name</th>
+                    <th>HostIP</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+           </thead>  
+            <tboby>
+            {% for instance in allinstancelist  %}
+                    <tr id="{{ instance.id }}">
+                        <td>{{ instance.nid }}</td>
+                        <td>{{ instance.region_name }}</td>
+                        <td>{{ instance.isp_name }}</td>
+                        <td>{{ instance.host_name }}</td>
+                        <td>{{ instance.ch_name }}</td>
+                        <td>{{ instance.host_ip }}</td>
+                        <td>{{ instance.status_name }}</td>
+                        <td></td>
+                    </tr>
+            {% endfor %} 
+            </tboby>  
+        </table>
+
+    </div> 
+</div>
+
+<div class="modal fade" id="instanceModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id='instancetitle'></h5>
+              <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <div id='instancemodalbody' class="modal-body">
+                <div id ="allinstance_content" class="table-responsive">
+                <form id='alertdeployform'>
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <tr><th>NID</th><td><input type="text" class="form-control" id="instance_nid"/></td></tr>
+                    <tr><th>Region</th><td>   
+                        <option value=""></option>
+  
+                        <select id = "instance_region" class="form-control" title="Region">
+                            {% for region in allregionlist %}
+                                <option value="{{ region.id }}">{{ region.ch_name }}</option>
+                            {% endfor %} 
+                        </select>
+                    </td></tr>
+                    <tr><th>ISP</th><td>
+                         <select id = "instance_isp" class="form-control" title="ISP">
+                            <option value=""></option>
+                           {% for isp in allisplist %}
+                                <option value="{{ isp.id }}">{{ isp.name }}</option>
+                            {% endfor %} 
+                        </select>
+                    </td></tr>
+                    <tr><th>HostName</th><td><input type="text" class="form-control" id="instance_hostname"/></td></tr>
+                    <tr><th>Name</th><td><input type="text" class="form-control" id="instance_name"/></td></tr>
+                    <tr><th>HostIP</th><td><input type="text" class="form-control" id="instance_hostip"/></td></tr>
+                    <tr><th>Status</th><td>
+                       <select id = "instance_status" class="form-control" title="Status">
+                            <option value=""></option>
+                           {% for status in allstatuslist %}
+                                <option value="{{ status }}">{{ status }}</option>
+                            {% endfor %} 
+                        </select>
+                    </td></tr>
+                </table>
+                </form>
+               </div> 
+            </div>
+            <div id ='instancemodalfooter' class="modal-footer">
+              <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+              <a class="btn btn-primary" href="#" id='instanceconfirm'>Confirm</a>
+            </div>
+        </div>
+    </div>
+</div>

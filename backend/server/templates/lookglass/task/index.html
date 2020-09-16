@@ -1,0 +1,233 @@
+
+<script type="text/javascript">
+        var loadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div>';  
+        var saveloadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">please wait...</span></div>';
+        var taskcount = parseInt('{{task_count}}')
+        console.log(taskcount);
+
+        $(document).ready(function () {  
+           var actionbutton = '<button class="btn btn-light" id ="taskreport" ><li class="fa fa-file-alt"></li></button>'+
+                              '<button class="btn btn-light" id ="taskdisable"><li class="fa fa-trash-alt"></li></button>';  
+           var table = $('#lgtask_table').DataTable({
+                    responsive: true,
+                    "oLanguage": {
+                    "sLengthMenu": "每頁顯示 _MENU_ 條",
+                    "sProcessing": "<img src='" + loadinghtml + "'/><span>&nbsp;&nbsp;Loading...</span>",
+                    "sInfo": "從 _START_ 到 _END_, 共 _TOTAL_ 條記錄",
+                    "sInfoEmpty": "",
+                    "sGroupActions": "_TOTAL_ records selected:  ",
+                    "sAjaxRequestGeneralError": "未能連線伺服器，請重試！",
+                    "sEmptyTable": "未找到相關記錄",
+                    "sZeroRecords": "共 0 條記錄",
+                    "sInfoFiltered": "(從 _MAX_ 條資料中檢索)",
+                    "oPaginate": {
+                        "sPrevious": "上一頁",
+                        "sNext": "下一頁",
+                        "sPage": "頁",
+                        "sPageOf": "of"
+                    },
+                    "sSearch": "搜尋",
+                },
+                "bFilter": true, //搜尋欄
+                "fnInitComplete": function (oSettings, json) {  //datatables初始化完畢後回撥方法
+                            
+                },
+                'columnDefs': 
+                [
+                    {'targets': 0,"data": null,"defaultContent": '<button class="btn btn-light taskcontent" id ="taskdetails" ><li class="fa fa-plus"></li></button>', "className": 'details-control','searchable': false,'orderable': false},
+                    { 'width':'10%' ,'targets': 10,"data": null,"defaultContent": actionbutton, "className": 'details-control','searchable': false,'orderable': false},
+                    
+                ],
+                order: [[ 1, 'desc' ]]
+            });
+            $('#lgtask_table tbody').on( 'click', 'button', function () {
+                if(gtoken!=null)
+                {
+                    var tr = $(this).parents('tr');
+                    var row = table.row( tr );
+                    var button_id = $(this).attr("id");
+                    tasknodes(button_id,tr,row);
+                }
+                else{
+                    getContent();
+                }
+            } )
+
+            $('#taskconfig').on('click', function() {
+
+                if(taskcount>=3)
+                {
+                    alert('The running task is over limit 3 counts.Just support 3 schedule tasks.')
+                }
+                else
+                {
+                    $("#tasktitle").html("task configurations");
+                    $("#taskmodaldialog").removeClass('modal-xl').addClass('modal-lg');
+                    var taskid = 0;
+                    var geturl = "lookglass/task_config";
+                    var uid = '{{ user_id }}';
+                    var data = {'username':gusername,'token':gtoken,"taskid":taskid};
+                    $.get(geturl, data , function(res) {
+                        $('#taskbody').html(res);
+                        $('#taskmodal').modal('show');
+                    });
+                }
+            }); 
+
+            $('#taskconfirmdisable').on('click', function() {
+                var taskid = $("#disabledtaskid").val();
+                $('#taskdelModal').modal('hide');
+                 var postdata = {
+                    'token':gtoken,
+                    'username':gusername,
+                    'action':'delete',
+                    'taskid':taskid
+                };
+                $.post("lookglass/task_config/",postdata,function(res){
+                    alert(res.message);
+                    $('.modal-backdrop').remove();
+                    getContent();
+                });
+
+            });
+    })
+    function tasknodes(button_id,tr,row)
+    {
+        var data = row.data();
+        var task_id = data[1];
+        var task_name = data[2];
+        if(gtoken !=null)
+        {
+            if (button_id == 'taskreport'){
+                show_report(task_id);
+            }
+            else if(button_id =='taskdisable'){
+                disable_task(task_id,task_name);
+            }
+            else if(button_id =='taskdetails'){
+                show_detail(task_id,tr,row);
+            }
+        }
+    }
+    function show_report(taskid)
+    {               
+           $("#taskmodaldialog").removeClass('modal-lg').addClass('modal-xl');
+           $("#tasktitle").html("task result");
+           $("#taskbody").html(loadinghtml);  
+           var detail_url = "lookglass/lg_task_history"
+           var data = {'taskid':taskid,'token':gtoken,'username':gusername};
+           $.get(detail_url, data , function(res) {
+                $("#taskbody").html("");
+                $("#taskbody").html(res);
+                $('#taskmodal').modal('show');
+           }); 
+    }
+    function disable_task(task_id,task_name){
+        $("#disabletaskname").html(task_name);
+        $("#disabledtaskid").val(task_id);
+        $('#taskdelModal').modal('show');
+    }
+
+    function show_detail(taskid,tr,row)
+    {
+        var detail_url = "lookglass/lg_task_instances";
+        var data = {'id':taskid,'token':gtoken,'username':gusername};
+        if ( row.child.isShown() ) {
+                // This row is already open - close it
+                row.child.hide();
+                tr.removeClass('shown');
+        }
+        else {
+                row.child(loadinghtml).show();
+                tr.addClass('shown');
+                $.get(detail_url, data , function(res) {
+                var detail_table = "<table><thead><tr><th>command</th><th>command host</th><th>nodes</th></tr></thead>"+
+                                   "<tbody><tr><td>"+res.command+"</td><td>"+res.command_host+"</td><td>"+res.message+"</td></tr></tbody></table>";
+                row.child(detail_table).show();
+            });
+        }
+    }
+</script>
+<style type="text/css">
+
+</style>
+
+<div class="container-fluid">
+   <div class="toolbar">
+        <button class="btn btn-secondary" id='taskconfig' ><li class="fa fa-plus"></li> </button>
+    </div>
+    <div id ="instance_content" class="table-responsive">
+        <table id = 'lgtask_table' class="table table-bordered" width="100%" cellspacing="0">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Item</th>
+                    <th>Task Name</th>
+                    <th>Start Time</th>
+                    <th>Peroic</th>
+                    <th>Times</th>
+                    <th>Status</th>
+                    <th>enabled</th>
+                    <th>Creator</th>
+                    <th>Create Time</th>
+                    <th>Actions</th>
+                </tr>
+           </thead>  
+            <tboby>
+                {% for task in task_list  %}
+                   <tr id='{{ task.id }}'>
+                        <td></td>
+                        <td>{{ task.id }}</td>
+                        <td>{{ task.name }}</td>
+                        <td>{{ task.starttime | date:'Y-m-d H:i' }}</td>
+                        <td>{{ task.every }} {{ task.period }}</td>
+                        <td>{{ task.times }}</td>
+                        <td>{{ task.status }}</td>
+                        <td>{{ task.enabled }}</td>
+                        <td>{{ task.created_by }}</td>
+                        <td>{{ task.created_time | date:'Y-m-d H:i'  }}</td>
+                        <td></td>
+
+                        </tr>
+                {% endfor %} 
+            </tbody>
+        </table>
+
+    </div> 
+</div>
+
+<div id="taskmodal" class="modal fade" tabindex="-1" role="dialog">
+    <div class="modal-dialog  modal-lg" id ='taskmodaldialog' role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="tasktitle">task configurations</h5>
+              <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <div class="modal-body" id="taskbody"> 
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--modal for disable task -->
+<div class="modal fade" id="taskdelModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-sm" id='taskdeleteddialog' role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Are you sure to disable?</h5>
+              <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <div class="modal-body">
+                Select "disable" below if you are ready to disable this task job:
+                <span class='badge badge-danger' id ="disabletaskname"></span> 
+                <input type="hidden" id="disabledtaskid" value='0' />
+              <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+              <a class="btn btn-primary" href="#" id='taskconfirmdisable'>disable</a>
+            </div>
+          </div>
+        </div>
+</div>

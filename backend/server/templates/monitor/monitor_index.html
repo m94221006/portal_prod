@@ -1,0 +1,352 @@
+{% load lookglass_extras %}
+
+<script type="text/javascript">
+        var loadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div>';
+        var saveloadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">please wait...</span></div>';
+
+        var alertstatus ='{{ alertstatus }}'
+        var checktimer = null;
+        var checkcount = 0;
+
+        $(document).ready(function () {        
+           var actionbutton = '<button class="btn btn-light" id ="configedit" ><li class="fa fa-file-alt"></li></button>'+
+                              '<button class="btn btn-light" id ="configdel"><li class="fa fa-trash-alt"></li></button>';
+           if(alertstatus =="1"){actionbutton = actionbutton +'<button class="btn btn-light" id ="configalert"><li class="fa fa-bell"></li></button>'}
+           var detailbutton = '<button class="btn btn-light" id="showdetail"><li class="fa fa-plus"></li></button>'
+           var table = $('#mnodes_table').DataTable({
+                    responsive: true,
+                    scrollY: "600px",
+                    scrollCollapse: true,
+                    "oLanguage": {
+                    "sLengthMenu": "每頁顯示 _MENU_ 條",
+                    "sProcessing": "<img src='" + loadinghtml + "'/><span>&nbsp;&nbsp;Loading...</span>",
+                    "sInfo": "從 _START_ 到 _END_, 共 _TOTAL_ 條記錄",
+                    "sInfoEmpty": "",
+                    "sGroupActions": "_TOTAL_ records selected:  ",
+                    "sAjaxRequestGeneralError": "未能連線伺服器，請重試！",
+                    "sEmptyTable": "未找到相關記錄",
+                    "sZeroRecords": "共 0 條記錄",
+                    "sInfoFiltered": "(從 _MAX_ 條資料中檢索)",
+                    "oPaginate": {
+                        "sPrevious": "上一頁",
+                        "sNext": "下一頁",
+                        "sPage": "頁",
+                        "sPageOf": "of"
+                    },
+                    "sSearch": "搜尋",
+                },
+                "bFilter": false, //搜尋欄
+                "fnInitComplete": function (oSettings, json) {  //datatables初始化完畢後回撥方法
+                            
+                },
+                
+                'columnDefs': 
+                [
+                    { 'width':'10%' ,'targets': 10,"data": null,"defaultContent": actionbutton, "className": 'details-control','searchable': false,'orderable': false},
+                    {'targets': 0,"data": null,"defaultContent": detailbutton, "className": 'details-control','searchable': false,'orderable': false},
+                    
+                ],
+                order: [[ 1, 'asc' ]]
+            });
+
+           $('#mnodes_table tbody').on( 'click', 'button', function () {
+                if(gtoken!=null)
+                {
+                    var tr = $(this).parents('tr');
+                    var row = table.row( tr );
+                    var button_id = $(this).attr("id");
+                    mnodes(button_id,tr,row);
+                }
+                else{
+                    getContent();
+                }
+            } )
+            $('#configdelete').on('click', function() {
+                var data = {};
+                data['username'] = gusername;
+                data['token']=gtoken;
+                data['action'] = -1
+                data['config_id'] = $("#deletedconfigid").val();
+                data['protocol'] = "";   
+                data['protocol_id'] = "";
+                data['interval'] = "";
+                data['jobs'] = "";
+                data['nodes'] = "";
+                data['checkrequest']= "";
+                data['checkresponse']= "";
+                data['wsorigin']="";
+                $("#jobdelmodalfooter").hide();
+                $("#jobdelmodalbody").html(saveloadinghtml);
+                $.post("monitor/Heartbeat_Config/",data,function(res){
+                  console.log(res);
+                  if(res.status_code == 200){
+                      checkcount = 0;
+                      generate_progress_table("jobdelmodalbody",res.newitem,res.delitem)
+                      checktimer = setInterval(check_progress,3000,res.config);
+                    }
+                    else{
+                        $('#jobdelModal').modal('hide');
+                        $('.modal-backdrop').remove();
+                        console.log(res);
+                        getContent(); 
+                    }
+                });
+
+              });
+
+        })
+
+        function mnodes(button_id,tr,row)
+        {
+            var config_id = row.id();
+            var data = row.data();
+            var file_name = data[1];
+            var protocol = data[2];
+            var interval = data[3];
+            if(gtoken !=null)
+            {
+                if (button_id == 'showdetail'){
+                    show_detail(row,tr,config_id);
+                }
+                else if(button_id =='configdel'){
+                    config_del(config_id,file_name);
+                }
+                else if(button_id =='configedit'){
+                    config_edit(config_id,protocol);
+                }
+                else if(button_id =='configalert'){
+                    alert_config(config_id,interval);
+                }
+            }
+        }
+
+        function show_detail(row,tr,config_id)
+        {
+              if ( row.child.isShown() ) {
+                  // This row is already open - close it
+                  row.child.hide();
+                  tr.removeClass('shown');
+              }
+              else {
+                  row.child(loadinghtml).show();
+                  tr.addClass('shown');
+                  var showtable ='<table id="configdetailtable_'+config_id+'" class="table table-bordered" width="100%" cellspacing="0">'+
+                                 '<thead><tr><th>Url</th><th>Nodes</th><th>Description</th></tr></thead><tbody></tbody></table>';
+                  var detail_url = "monitor/Config_Detail";
+                  var data = {'config_id':config_id,'token':gtoken,'username':gusername};
+                  $.get(detail_url, data , function(res) {
+                        row.child(showtable).show(); 
+                        console.log(res);
+                        $('#configdetailtable_'+config_id+' tr:last').after('<tr><td>'+res.urls.replace(/\,/g,'<br/>')+'</td><td>'+res.nodes.replace(/\,/g,'<br/>')+'</td><td>'+res.others.replace(/\,/g,'<br/>')+'</td></tr>');
+                  });
+
+              }
+        }
+
+        function config_add()
+        {
+            var action = 'new'
+            var geturl = "monitor/Config_Deploy";
+            var data = {'action':action,'username':gusername,'token':gtoken,'protocol':'','config_id':0};
+            $.get(geturl, data , function(res) {
+                $("#configmodaltitle").html("New Configuration");
+                $('#configmodalbody').html(res);
+                $('#configmodal').modal('show');
+            });
+        }
+
+        function config_edit(config_id,protocol){
+            var action = 'edit'
+            var geturl = "monitor/Config_Deploy";
+            var data = {'action':action,'username':gusername,'token':gtoken,'protocol':protocol,'config_id':config_id};
+            $.get(geturl, data , function(res) {
+                $("#configmodaltitle").html("Modify Configuration");
+                $('#configmodalbody').html(res);
+                $('#configmodal').modal({backdrop: 'static',keyboard: false});
+            });
+        }
+
+        function config_del(config_id,file_name){
+            var bodymessage = "Select \"deleted\" below if you are ready to delete this monitor job:"+
+                              "<span class='badge badge-danger'>"+file_name+"</span>" +
+                              "<input type='hidden' id='deletedconfigid' value='"+config_id+"' />"
+            $("#jobdelmodalbody").html(bodymessage);
+            $("#jobdelmodalfooter").show();
+            $('#jobdelModal').modal('show');
+        }
+
+        function alert_config(config_id,interval)
+        {
+            var geturl = "monitor/alert_deploy";
+            var data = {'username':gusername,'token':gtoken,'hid':config_id};
+            $.get(geturl, data , function(res) {
+                $("#configmodaltitle").html("Alert Configuration");
+                $('#configmodalbody').html(res);
+                $('#configmodal').modal({backdrop: 'static',keyboard: false});
+            });
+        }
+       
+        function deploy_refresh(config_id)
+        {
+            var data = {'username':gusername,'token':gtoken,'config_id':config_id};
+            var geturl = "monitor/Heartbeat_Instance_Config/";
+            $("#refresh_"+config_id).html(loadinghtml);
+            $.post(geturl, data , function(res) {
+                console.log(res);
+                if(res.status_code ==  200){
+                    if(res.message.status == 1){
+                        $("#deploystatus_"+config_id).html("ready");
+                    }
+                    else{
+                        $("#refresh_"+config_id).html("");
+                    }
+                }
+                else{
+                    $("#refresh_"+config_id).html("");
+                }
+            });
+
+        }
+
+        function generate_progress_table(modalbodyname,newitem,delitem){
+            $("#"+modalbodyname).empty()
+            $("#"+modalbodyname).html("<table id = 'configprogress_table' class='table table-bordered' width='100%' cellspacing='0'>"+
+                                    "<thead><tr><th>item</th><th>monitor name</th><th>Action</th><th>status</th></tr></thead><tbody></tody></table>")
+            $.each(newitem, function( key, value ) {
+                $("#configprogress_table tbody").append("<tr><td>"+key+"</td><td>"+value +"</td><td>deploy</td><td id='configstatus_"+key+"'>"+saveloadinghtml+"</td></tr>");
+            });
+
+            $.each(delitem, function( key, value ) {
+                $("#configprogress_table tbody").append("<tr><td>"+key+"</td><td>"+value +"</td><td>remove</td><td id='configstatus_"+key+"'>"+saveloadinghtml+"</td></tr>");
+            });
+        }
+
+        function check_progress(config)
+        {
+            if(checkcount == 30)
+            {
+                clearInterval(checktimer);
+                $('.modal-backdrop').remove();
+                getContent();
+            }
+            else
+            {
+                checkcount = checkcount +1 ;
+                $.get("monitor/Heartbeat_Config_status",{'username':gusername,'token':gtoken,'config_id':config.id},function(res){
+                    console.log(res);
+                    if(res.status_code == 200)
+                    {
+                        if(res.configstatus == 1)
+                        {
+                            clearInterval(checktimer);
+                            checktimer =  null;
+                            $('.modal-backdrop').remove();
+                            getContent(); 
+                        }
+                        else
+                        {
+                            $.each(res.item, function( key, value)
+                             {
+                                console.log(value.status);
+                                if(value.status ==1 ){
+                                    $("#configstatus_"+key).html("Ready");
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+        }
+
+</script>
+<div class="text-center" id='monitorrunloading'></div>
+</div>
+
+<div class="container-fluid">
+    <div class="toolbar">
+        <button class="btn btn-secondary" onclick= "config_add()"><li class="fa fa-plus"></li> </button>
+    </div>
+    <div id ="monitorv2_content" class="table-responsive">
+        <table id = 'mnodes_table' class="table table-bordered" width="100%" cellspacing="0">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Filename</th>
+                    <th>Type</th>
+                    <th>Interval(second)</th>
+                    <th>Status</th>
+                    <th>Node count</th>
+                    <th>Creator</th>
+                    <th>Created_time</th>
+                    <th>lastupdatedby</th>
+                    <th>lastupdatedtime</th>
+                    <th>Actions</th>
+                </tr>
+           </thead>
+            <tboby>
+               {% for url in urllist  %}
+                    <tr id='{{ url.config_id }}'>
+                        <td></td>
+                        <td>{{ url.file_name }}</td>
+                        <td>{{ url.protocol_name }}</td>
+                        <td>{{ url.interval }}</td>
+                        <td>
+                            {% if url.status == 1 %}
+                                <div  align='center'><span class="badge badge-success"><i class="fas fa-check-circle"></i></span></div>
+                            {% else %}
+                                <div  align='center'><span class="badge badge-warning"><i class="fas fa-spinner"></i></span></div>
+                            {% endif %}                        
+                        </td>
+                        <td>{{ url.total }}</td>
+                        <td>{{ url.creator }} </td>
+                        <td>{{ url.created_time }}</td>
+                        <td>{{ url.lastupdatedby }}</td>
+                        <td>{{ url.lastupdatedtime }}</td>
+                        <td></td>
+                    </tr>
+                {% endfor %} 
+            </tboby>    
+        </table>
+
+    </div> 
+</div>
+
+<!--modal for delete heartbeat config-->
+<div class="modal fade" id="jobdelModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Are you sure to delete?</h5>
+              <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <div id='jobdelmodalbody' class="modal-body">
+                Select "deleted" below if you are ready to delete this monitor job:
+                <span class='badge badge-danger' id ="deletefile"></span> 
+                <input type="hidden" id="deletedconfigid" value='0'/>
+            </div>
+            <div id ='jobdelmodalfooter' class="modal-footer">
+              <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+              <a class="btn btn-primary" href="#" id='configdelete'>Delete</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div id="configmodal" class="modal fade" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id='configmodaltitle'></h5>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div id='configmodalbody' class="modal-body">
+            </div>
+        </div>
+    </div>
+        
+</div>

@@ -1,0 +1,162 @@
+
+<script type="text/javascript">
+         var table =null;
+        var loadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div>';
+
+        $(document).ready(function () {
+            initial_table();
+        })
+
+        function insert_html(id,command){
+                 var html = '';
+                 if(command == "har")
+                 {
+                    html = "<div id='hartotal_"+id+"'></div>"+
+                          "<div id='legend-holder_"+id+"'></div>"+
+                          "<select id='page-selector_"+id+"' class='page-selector_"+id+"'></select>"+
+                          "<div id='haroutput_"+id+"'></div></div>";
+                      
+                 }
+                 else{
+                        var f_tab_name = 'Header';
+                        var s_tab_name = 'Content';
+                        if(command =='dig'){
+                            f_tab_name ='Answer Section'
+                        }
+                       html = "<div class='card card-nav-tabs'><div class='card-header card-header-primary'><div class='nav-tabs-navigation'><div class='nav-tabs-wrapper'>"+
+                        "<ul class='nav nav-tabs' data-tabs='tabs' role='tablist'>"+
+                        "<li class='nav-item'><a class='nav-link active' href='#firsttab_"+id+"' data-toggle='tab'><span>"+f_tab_name+"</span></a></li>"+
+                        "<li class='nav-item'><a class='nav-link' href='#secondtab_"+id+"' data-toggle='tab'><span>"+s_tab_name+"</span></a></li></ul></div></div></div>"+
+                        "<div class='card-body'><div class='tab-content'>"+
+                        "<div class='tab-pane active' id='firsttab_"+id+"'>"+"</div>"+
+                        "<div class='tab-pane fade' id='secondtab_"+id+"'></div>"+
+                        "</div></div></div>";
+                 }
+                 return html
+        }
+       
+        function show_content(id,command,header,body)
+        {
+                  if(command == "har")
+                  {
+                      if (body!= null)
+                      {
+                         console.log(body);
+                          var pageSelectorEl = document.getElementById("page-selector_"+id);
+                          var legendHolderEl = document.getElementById("legend-holder_"+id);
+                          var perfCascadeOptions = {
+                                  showAlignmentHelpers: true, //default: true
+                                  showIndicatorIcons: true, //default: true
+                                  selectedPage: 1,
+                                  pageSelector: pageSelectorEl, //default: undefined
+                                  legendHolder: legendHolderEl, //default: undefined (hide-legend)
+                                  showUserTiming: true, //default: false
+                                  showUserTimingEndMarker:true
+                          }
+                          var perfCascadeSvg = perfCascade.fromHar(body, perfCascadeOptions);
+                          $("#haroutput_"+id).append(perfCascadeSvg);
+                        }
+                  }
+                  else
+                  {
+                     $("#firsttab_"+id).html(header);
+                      if(command =="curl" || command=="websocket")
+                      {
+                        body = "<textarea rows='15' cols='120' readonly>"+body.replace("\r\n","<br/>")+"</textarea>";
+                      }
+                      $("#secondtab_"+id).html(body);
+
+                  }
+        }
+  
+        function initial_table()
+        {
+             table = $('#history_table').DataTable({
+                responsive: true,
+                "oLanguage": {
+                "sLengthMenu": "每頁顯示 _MENU_ 條",
+                "sProcessing": "<img src='" + loadinghtml + "'/><span>&nbsp;&nbsp;Loading...</span>",
+                "sInfo": "從 _START_ 到 _END_, 共 _TOTAL_ 條記錄",
+                "sInfoEmpty": "",
+                "sGroupActions": "_TOTAL_ records selected:  ",
+                "sAjaxRequestGeneralError": "未能連線伺服器，請重試！",
+                "sEmptyTable": "未找到相關記錄",
+                "sZeroRecords": "共 0 條記錄",
+                "sInfoFiltered": "(從 _MAX_ 條資料中檢索)",
+                "oPaginate": {
+                    "sPrevious": "上一頁",
+                    "sNext": "下一頁",
+                    "sPage": "頁",
+                    "sPageOf": "of"
+                },
+                "sSearch": "搜尋",
+            },
+            "bFilter": false, //搜尋欄
+            "fnInitComplete": function (oSettings, json) {  //datatables初始化完畢後回撥方法
+                         
+            },
+
+            'columnDefs': [
+                {'targets': 0,"data": null,"defaultContent": '<button class="btn btn-light historycontent"><li class="fa fa-plus"></li></button>', "className": 'details-control','searchable': false,'orderable': false},
+            ],
+             order: [[ 1, 'desc' ]]
+            });
+        }
+
+        $('#history_table tbody').on( 'click', 'button', function () {
+              var tr = $(this).parents('tr');
+              var row = table.row( tr );
+              var id = row.id();
+              var data = row.data();
+              var command = data[3];
+              var detail_url = "lookglass/lg_history_content";
+              var data = {'id':id,'token':gtoken,'username':gusername};
+              
+              if ( row.child.isShown() ) {
+                  // This row is already open - close it
+                  row.child.hide();
+                  tr.removeClass('shown');
+              }
+              else {
+                  row.child(loadinghtml).show();
+                  tr.addClass('shown');
+                  $.get(detail_url, data , function(res) {
+                      var header = res.header;
+                      var body = res.body;
+                      if(command =='har'){body =res.result["result"] }
+                      var content_html = insert_html(id,command);
+                      row.child(content_html).show();
+                      show_content(id,command,header,body);
+                   });
+              }
+        } );
+ 
+</script>
+<table id = 'history_table' class="table table-bordered" width="100%" cellspacing="0">
+                 <thead>
+                    <tr>
+                        <th></th>
+                        <th>published_date</th>
+                        <th>monitor</th>
+                        <th>type</th>
+                        <th>domain</th>
+                        <th>status_code</th>
+                        <th>total_time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for detail in detaillist  %}
+                   <tr id='{{ detail.id }}'>
+                       <td></td>
+                       <td>{{ detail.published_date }}</td>
+                       <td>{{ detail.monitor }}</td>
+                       <td>{{ detail.type }}</td>
+                       <td>{{ detail.domain }}</td>
+                       <td>{{ detail.status_code }}</td>
+                       <td>{{ detail.total_time }}</td>
+
+                    </tr>
+                    {% endfor %} 
+
+<tbody>
+      

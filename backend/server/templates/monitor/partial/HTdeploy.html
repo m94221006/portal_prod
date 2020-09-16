@@ -1,0 +1,631 @@
+{% load lookglass_extras %}
+<script type="text/javascript">
+        var max_url_no = '{{ configmaxurlcount }}' ;
+        var min_interver_num = '{{ configmininterval }}' ;
+        var existed_url_no = '{{ configurlcount }}'
+        $(document).ready(function () {    
+           console.log(max_url_no) ;
+           console.log(existed_url_no) ;
+           $('#jobprotocol').selectpicker();
+           $('#jobinterval').selectpicker();
+           $('#jobnodes').multiselect({
+                    enableClickableOptGroups: true,
+                    enableCollapsibleOptGroups: true,
+                    enableFiltering: true,
+                    includeSelectAllOption: true,
+                    buttonWidth: '100%',
+                    maxHeight: 500,
+                    buttonText: function(options, select) 
+                    {
+                        if (options.length === 0) {return '---監控點---';}
+                        else if (options.length > 3){return '己選擇'+options.length+'個重要監控點!';}
+                        else 
+                        {
+                            var labels = [];
+                            options.each(function() 
+                            {
+                                if ($(this).attr('label') !== undefined) {labels.push($(this).attr('label'));}
+                                else {labels.push($(this).html());}
+                            });
+                            return labels.join(', ') + '';
+                        }
+                    }
+            });
+
+            Initial_Value();
+
+            $('.add-info-link ').on('click', function() {
+                $('.add_info').toggle( "slow" );
+            });
+
+            $('#jobprotocol').on('change', function(){
+                var selectedtext = $('#jobprotocol option:selected').text();
+                additon_show(selectedtext);
+            });
+
+            $('.addition').change(function() {
+                var id = $(this).attr('id');
+                if($(this).is(":checked")) {                    
+                    $("#"+id+"part").find("input,select,textarea,button").prop("disabled",false);
+
+                }
+                else{
+                    $("#"+id+"part").find("input,select,textarea,button").prop("disabled",true);
+                }
+            });
+
+            $('#deploy_commit').on("click",function (event) {
+                var data = vertify_config();
+                console.log(data);
+                if(data){
+                    data['username'] = gusername;
+                    data['token']=gtoken;
+                    console.log(data);
+                    $("#htdeploryform").find("input,select,textarea,button").prop("disabled",true);
+                    $("#saveinfo").html(saveloadinghtml);
+                    $.post("monitor/Heartbeat_Config/",data,function(res){
+                        if(res.status_code == 200){
+                            checkcount = 0;
+                            generate_progress_table("configmodalbody",res.newitem,res.delitem)
+                            checktimer = setInterval(check_progress,3000,res.config);
+                        }
+                        else{
+                            $('#configmodal').modal('hide');
+                            $('.modal-backdrop').remove();
+                            console.log(res);
+                            getContent(); 
+                        }
+                    });
+                }
+            });
+        })
+
+        function Initial_Value(){
+            var config_id ='{{ config_id }}'
+            $("#deployconfigid").val(config_id);
+            if(config_id == 0){
+                console.log('config_id:'+config_id);
+                New_Config();
+            }
+            else{
+                Edit_Config();
+            }
+        }
+
+        function New_Config(){
+            
+            // protocol
+            if (parseInt(existed_url_no) >= parseInt(max_url_no))
+            {
+                $("#htdeploryform").find("input,select,textarea,button").prop("disabled",true);
+            }
+            else{
+                $("#htdeploryform").find("input,select,textarea,button").prop("disabled",false);
+
+                $('#jobprotocol').removeAttr('disabled');
+                $('#jobprotocol').val(0);
+                $('#jobprotocol').selectpicker('refresh');
+
+                // interval 
+                $('#jobinterval').removeAttr('disabled');
+                $('#jobinterval').val(0);
+                $('#jobinterval').selectpicker('refresh');
+
+                $("#jobs").val("");
+                $('option', $('#jobnodes')).each(function(element) {
+                    $(this).removeAttr('selected').prop('selected', false);
+                });            
+                $('#jobnodes').multiselect('refresh');
+
+                // addition info
+                $("#httpaddition").hide();
+                $("#wscheck").prop('checked', false);$("#wschecktext").val("");   $("#wschecktext").prop('disabled', true);
+                $("#checkrequest").prop('checked', false);
+                $("#checkrequestpart").find("input,select,textarea,button").prop("disabled",true);
+                $("#checkresponse").prop('checked', false);
+                $("#checkresponsepart").find("input,select,textarea,button").prop("disabled",true);
+            }
+        }
+
+        function Edit_Config(){
+                var urls = '{{ configurl }}';
+                if(urls.indexOf(",")<0 ){urls = urls +",";}
+                var nodes = '{{ confignodes }}';
+                var nodeids = '{{ confignodeids }}';
+                var protocol = '{{ protocol }}';
+                var node_ids = nodeids.split(',');
+                var interval = '{{ configinterval }}' 
+                var configrequest = '{{ configrequest }}'
+                var configreponse = '{{ configreponse }}'
+                var configorigin = '{{config.origin}}'
+                additon_show(protocol);
+
+                // protocol
+                $('#jobprotocol').prop('disabled', true);
+                $("#jobprotocol option").filter(function() {
+                    return this.text == protocol; 
+                }).attr('selected', true);
+                $('#jobprotocol').selectpicker('refresh');
+
+
+                //interval
+                //$('#jobinterval').prop('disabled', true);
+                $("#jobinterval option").filter(function() {
+                    return this.text == interval; 
+                }).attr('selected', true);
+                $('#jobinterval').selectpicker('refresh');
+
+                
+                urls = urldecoding(urls);
+                $("#jobs").val(urls.replace(/\,/g,",\r\n"));
+                $.each( node_ids, function( key, value ) {
+                    $('option[value="'+value+'"]', $('#jobnodes')).prop('selected', true);
+                });
+                $('#jobnodes').multiselect('refresh');
+
+                if(configorigin){
+                    $("#wscheck").prop('checked', true);
+                    $("#wschecktext").val(configorigin);
+                    $("#wscheckpart").find("input,select,textarea,button").prop("disabled",false);
+                }
+                else{
+                    $("#wscheck").prop('checked', false);
+                    $("#wscheckpart").find("input,select,textarea,button").prop("disabled",true);
+                }
+  
+                if(configrequest){
+                    $("#checkrequest").prop('disabled', false);
+                    $("#checkrequest").prop('checked', true);
+                    var configrequest_method = '{{ configrequest_method }}';
+                    var configrequest_header = unescapeword("{{ configrequest_header }}");
+                    var configrequest_body = unescapeword('{{ configrequest_body }}');
+                    if(configrequest_method){$("#requestmethod option:selected").val(configrequest_method);}
+                    if(configrequest_header){$("#requestheaders").val(configrequest_header.replace(/,/g,'\r\n'));}
+                    if(configrequest_body){$("#requestbody").val((configrequest_body));}
+                    $("#checkrequestpart").find("input,select,textarea,button").prop("disabled",false);
+                }
+                else{
+                    $("#checkrequest").prop('checked', false);
+                    $("#checkrequestpart").find("input,select,textarea,button").prop("disabled",true);
+                }
+                 if(configreponse){
+                    console.log(configreponse);
+                    $("#checkresponse").prop('disabled', false);
+                    $("#checkresponse").prop('checked', true);
+                    var configresponse_status = "{{ configresponse_status }}";
+                    var configresponse_body = '{{ configresponse_body }}';
+
+                    if(configresponse_status){$("#responsestatus").val(configresponse_status);}
+                    if(configresponse_body){$("#responsebody").val(configresponse_body.replace(/,/g,'\r\n'));}
+                    $("#checkresponsepart").find("input,select,textarea,button").prop("disabled",false);
+
+                }
+                else{
+                    $("#checkresponse").prop('checked', false);
+                    $("#checkresponsepart").find("input,select,textarea,button").prop("disabled",true);
+                }
+        }
+        function unescapeword(safe) {
+            return safe.replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'");
+        }
+
+        function additon_show(protocol){
+            if(protocol == 'http' || protocol=='websocket'){
+                $("#httpaddition").show();
+                if (protocol=='websocket'){
+                    $("#wsorigin").show();
+                }
+                else{
+                    $("#wsorigin").hide();
+                }
+            }
+            else{
+                $("#httpaddition").hide();
+            }
+        }
+
+        function vertify_config()
+        {
+            var post_data = {};
+            var action = 1
+            var config_id = $("#deployconfigid").val();
+            if(config_id != 0){action = 2}
+            var protocol = $("#jobprotocol option:selected").val();
+            var protocol_name = $("#jobprotocol option:selected").text();
+
+            var interval = $("#jobinterval option:selected").val();
+            var jobs = $("#jobs").val();
+            var nodes = $("#jobnodes option:selected").map(function(i, el) { return $(el).val(); }).get().join(";");
+            var wsorigin = $("#wschecktext").val();
+            var checkrequest = {};
+            var checkresponse = {};
+            var vertify_result = true
+
+            //////////////////////////initial post data ////////////////////
+            post_data['action'] = action
+            post_data['config_id'] = config_id
+            post_data['protocol'] = protocol
+
+            /////////////////////////// protocol check ///////////////////// 
+            if(!protocol){
+                vertify_result = false;
+                $("#jobprotocolinfo").html("<span class='text-danger'>please select the monitored protocol <span>");
+            }
+            else{$("#jobprotocolinfo").html("");}
+
+            /////////////////////////// interval check ///////////////////// 
+            if(!interval){
+                vertify_result = false;
+                $("#jobintervalinfo").html("<span class='text-danger'>please select the monitored interval <span>");
+            }
+            else{$("#jobintervalinfo").html("");}
+
+            /////////////////////////// url check ///////////////////// 
+            if(!jobs){
+                vertify_result = false;
+                $("#jobsinfo").html("<span class='text-danger'>please input the host that need to monitor <span>"); 
+            }
+            else{ 
+                $("#jobsinfo").html(""); 
+                vertify_result = vertify_hosts(protocol_name,jobs);
+                if(!vertify_result){
+                    $("#jobsinfo").html("<span class='text-danger'>please input the right format for monitor<span>"); 
+                }
+                else{
+                   $("#jobsinfo").html(""); 
+                }
+            }
+
+            /////////////////////////// node check ///////////////////// 
+            if(!nodes){
+                vertify_result = false;
+                $("#jobnodesinfo").html("<span class='text-danger'>please select the monitored nodes for host <span>");
+            }
+            else{$("#jobnodesinfo").html("");}
+
+            /////////////////////////// wsorigin check ///////////////////// 
+            if(protocol=="websocket"){
+                console.log(wsorigin.trim());
+                if(!wsorigin){
+                    vertify_result = false;
+                    $("#wscheckinfo").html("<span class='text-danger'>please input the origin for websocket <span>");
+                }
+                else{
+                    $("#wscheckinfo").html(""); 
+                    var vertify_result = isValidHost("http",wsorigin.trim()); 
+                    console.log("vertify_result:"+vertify_result); 
+                    if(!vertify_result){
+                        $("#wscheckinfo").html("<span class='text-danger'>please input the right origin format for websocket.<span>"); 
+                    }
+                    else{$("#wscheckinfo").html("");}
+                }
+            }
+
+
+            /////////////////////////// request check ///////////////////// 
+            if($('#checkrequest').is(':checked')){
+                vertify_result = true
+                var requestmethod = $("#requestmethod option:selected").val();
+                var requestheader = $("#requestheaders").val().trim();
+                var requestbody = $("#requestbody").val().trim();
+                checkrequest ={"method":requestmethod,"headers":requestheader,"body":requestbody};
+                if(requestheader){
+                    vertify_result = vertify_headers(requestheader);
+                    if(!vertify_result){
+                        $("#requestheadersinfo").html("<span class='text-danger'>please input the right format for check request header.<span>"); 
+                    }
+                    else{ $("#requestheadersinfo").html("");}
+                }
+            }
+            else{
+                $("#resquestinfo").html("");
+                $("#requestheadersinfo").html("");
+                $("#requestbodyinfo").html("");
+                checkrequest = null
+
+            }
+
+
+            /////////////////////////// response check ///////////////////// 
+            if($('#checkresponse').is(':checked')){
+                var responsestatus = $("#responsestatus").val().trim();
+                var responsebody = $("#responsebody").val().trim();
+                checkresponse ={"status":responsestatus,"body":responsebody};
+
+                if(!responsestatus && !responsebody){
+                    vertify_result = false;
+                    $("#responseinfo").html("<span class='text-danger'>please input the check response status code(200,301,302) or body for host <span>");
+                }
+                else{
+                    $("#responseinfo").html(""); 
+                    if(responsebody){
+                        vertify_result = vertify_response_body(responsebody);
+                        console.log("responsebody check:"+vertify_result);
+                        if(!vertify_result){
+                            $("#responsebodyinfo").html("<span class='text-danger'>please input the right format for check response body.<span>"); 
+                        }
+                        else{
+                            $("#responsebodyinfo").html("");
+                        }
+                    }
+
+                }
+            }
+            else{
+                $("#responseinfo").html("");
+                $("#responsestatusinfo").html("");
+                $("#responsebodyinfo").html("");
+                checkresponse = null;
+            }
+
+            /////////////////// generate post data //////////////////////
+            if(vertify_result == false){
+                return null
+            }
+            else{
+                post_data['protocol_id'] = protocol;
+                post_data['interval'] = interval;
+                post_data['jobs'] = jobs.trim();
+                post_data['nodes'] = nodes;
+                post_data['checkresponse'] =''
+                post_data['checkrequest']=''
+
+                if(protocol_name=='http' || protocol_name=='websocket'){
+                    if(checkrequest){ post_data['checkrequest']=  JSON.stringify(checkrequest);}
+                    if(checkresponse){post_data['checkresponse']=  JSON.stringify(checkrequest);}
+                }
+
+
+                post_data['wsorigin']=wsorigin.trim();
+                return post_data 
+            }
+        }
+
+        function vertify_hosts(protocol,jobs){
+            var message  ="<span class='text-danger'>please input the right format with , to split for host  to monitor<span>";
+            if(jobs.indexOf(',')< 0){ $("#jobsinfo").html(message); return false;}
+            else{
+                var valuelist = jobs.split(',');
+                if(valuelist.length == 0){ $("#jobsinfo").html(message); return false;}
+                else
+                {
+                    for(var i=0; i<valuelist.length;i++)
+                    {
+                        var value = valuelist[i].trim();
+                        if(value)
+                        {
+                            if(protocol == 'http' || protocol == 'websocket')
+                            {
+                                var result = isValidHost(protocol,value.trim()); 
+                                if(!result){$("#jobsinfo").html(message); return false;}
+                            }
+                            else if(protocol =='icmp'){
+                                if(value.indexOf(":") >= 0){$("#jobsinfo").html(message); return false;break;}
+                                else{
+                                    var result = isValidHost(protocol,value.trim());
+                                    console.log('icmp result:'+result); 
+                                    if(!result){$("#jobsinfo").html(message); return false;break;}
+                                    else{$("#jobsinfo").html("");}
+
+                                }
+                            }
+                            else if(protocol =='tcp'){
+                            if(value.indexOf(":") < 0){$("#jobsinfo").html(message);return false;break;}
+                            else{
+                                    var host = value.trim().split(":")[0];
+                                    var port = value.trim().split(":")[1];
+                                    var hostresult = isValidHost(protocol,host); 
+                                    var portresult = validateNum(port,1,65535);
+                                    console.log('tcp result:'+hostresult+":"+portresult); 
+                                    if(hostresult && portresult){$("#jobsinfo").html("");}
+                                    else{$("#jobsinfo").html(message);return false;break;}
+
+                                }
+                            }
+                        }
+                        else{ 
+                            if(i ==0){$("#jobsinfo").html(message);return false;break;}}
+                    }
+                    return true
+                }
+                return true
+            }     
+        }
+
+        function isValidHost(checktype,host) {
+            if (!host) return false;
+            var re = null;
+            if(checktype == 'http'  || checktype == 'websocket'){ 
+                re = /^(https?|s?ftp):\/\/(((([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:)*@)?(((\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.(\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.(\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.(\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5]))|((([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.)+(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.?)(:\d*)?)(\/((([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:|@)+(\/(([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:|@)*)*)?)?(\?((([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:|@)|[\uE000-\uF8FF]|\/|\?)*)?(#((([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:|@)|\/|\?)*)?$/i;
+                result = re.test(host);
+                console.log(result);
+                return re.test(host);
+
+            }
+            else {
+                var regExpIp = new RegExp("^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
+                var regResultIp = regExpIp.exec(host);                
+                console.log("regResultIp:"+regResultIp);
+                if(regResultIp) {return true;}
+                re = /^(?!:\/\/)([a-zA-Z0-9-]+\.){0,5}[a-zA-Z0-9-][a-zA-Z0-9-]+\.[a-zA-Z]{2,64}?$/gi;
+                var host_result = re.test(host);
+                console.log("host_result:"+host_result);
+                if(host_result) {return true;}
+                return false;
+            }            
+        }
+        function validateNum(input, min, max) {
+            var num = +input;
+            return num >= min && num <= max && input === num.toString();
+        }
+
+        function vertify_headers(headers){
+            var headerlist =  headers.split('\n');
+            for(var i=0 ;i< headerlist.length;i++)
+            {
+                 var header = headerlist[i].trim();
+                 if(header.indexOf(":")==-1){
+                     return false
+                 }
+            }
+            return true
+        }
+
+        function vertify_response_body(body){
+            var bodylist =  body.split('\n');
+            console.log(bodylist);
+            console.log(bodylist.length);
+            for(var i=0 ;i< bodylist.length;i++)
+            {
+                 var subbody = bodylist[i].trim();
+                 if(subbody.indexOf("-")==-1){
+                     return false
+                 }
+            }
+            return true
+        }
+
+        function valuecheck(){
+            var data = vertify_config();
+            console.log(data);
+
+        }
+        function urldecoding(urls){
+            var parser = new DOMParser;
+            var dom = parser.parseFromString(
+                    '<!doctype html><body>' + urls,
+                    'text/html');
+            return dom.body.textContent;
+        }
+</script>
+<style type="text/css">
+
+    .add-info-link {
+    text-decoration: none;
+    text-transform: uppercase;
+    font-weight: 900;
+    margin-bottom: 16px;
+    align-items: center;
+    -moz-align-items: center;
+    -webkit-align-items: center;
+    -o-align-items: center;
+    -ms-align-items: center; 
+        font-size: 14px;
+
+    }
+    .add-info-link .zmdi {
+        font-size: 14px;
+        padding-right: 14px; 
+    }
+
+    .add_info {
+    display: none;
+    }
+</style>
+
+<form id='htdeploryform'>
+    <input type="hidden" id="deployconfigid" value='0' />
+    <div class="form-group">
+        <label for="type-name" class="col-form-label">Type:</label>
+        <select id = "jobprotocol" class="form-control" title="類型">
+            {% for protocol in protocollist %}
+                    <option value="{{ protocol.id }}">{{ protocol.name }}</option>
+            {% endfor %}
+        </select>
+        <p id ='jobprotocolinfo'></p>
+    </div>
+
+    <div class="form-group">
+        <label for="interval-item" class="col-form-label">Interval:</label>
+            <select id = "jobinterval" class="form-control" title="間隔">
+                {% for interval in configintervallist %}
+                    <option value="{{ interval }}">{{ interval }}</option>
+                {% endfor %}
+            </select>
+            <p id ='jobintervalinfo'></p>
+
+    </div>
+
+    <div class="form-group">
+        <label for="url-list" class="col-form-label">URL:(IP or Domain))<span class='text-primary'>max total: '{{ configmaxurlcount }}' ,existed total: '{{ configurlcount }}' <span></label>
+        <textarea class="form-control"  rows="5" id="jobs"></textarea>
+        <p id ='jobsinfo'></p>
+    </div>
+    
+    <div class="form-group">
+        <label for="url-list" class="col-form-label">Nodes:</label>
+        <select id = "jobnodes" multiple="multiple" class="form-control" aria-required="true" >
+                {% for region in regionlist %}
+                <optgroup label="{{ region }}({{ monitorlist|instance_region_in_count:region }})">
+                    {% for monitor in monitorlist|instance_in_region:region  %}
+                        <option id='monitor-{{ monitor.id }}' value="{{ monitor.id }}">{{ monitor.ch_name }}</option>
+                    {% endfor %} 
+                </optgroup>
+                {% endfor %}
+        </select>   
+        <p id ='jobnodesinfo'></p>
+
+    </div>
+
+    <div class ="form-group" id ='httpaddition' style='display:none'>
+        <a href="#" class="add-info-link"><i class="zmdi fas fa-chevron-right"></i>Additional info</a>
+        <div class="add_info">
+            <div class="form-group" id='wsorigin'>             
+                <label class="d-block">
+                    <input type="checkbox" class='addition' id="wscheck"> origin(for ws)
+                </label>
+            <div id='wscheckpart'>
+                <input type="text" class="form-control" id="wschecktext"/>
+                <p id ='wscheckinfo'></p>
+            </div>
+
+        </div>   
+        <div class="form-group">
+            <input type="checkbox"  class='addition' id="checkrequest"> 
+            <label for="checkrequesttext" class="col-form-label">check.request</label>
+            <div id ='checkrequestpart'>
+                <label for="requestmethod" class="col-form-label">method:</label>
+                <select id = "requestmethod" class="form-control" title="request method" disabled>
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="HEAD">HEAD</option>
+                </select>
+                <label for="requestheaders" class="col-form-label">headers:</label>
+                <textarea class="form-control"  rows="3" id="requestheaders" disabled></textarea>
+                <p id ='requestheadersinfo'></p>
+                <label for="requestbody" class="col-form-label">body:</label>
+                <textarea class="form-control"  rows="3" id="requestbody" disabled></textarea>
+                <p id ='requestbodyinfo'></p>
+            </div>
+
+        </div>
+        <div class="form-group">
+           <input type="checkbox"  class='addition' id="checkresponse"> 
+            <label for="checkresponsetext" class="col-form-label">check.response</label>
+            <div id ='checkresponsepart'>
+                <label for="responsestatus" class="col-form-label">status code:</label>
+                <input type="text" class="form-control" id="responsestatus"/>
+                <p id ='responsestatusinfo'></p>
+                <label for="responsebody" class="col-form-label">body:</label>
+                <textarea class="form-control"  rows="5" id="responsebody" disabled></textarea>
+                <p id ='responsebodyinfo'></p>
+            </div>
+        </div>       
+        </div>
+    </div>
+
+    <div class="form-group text-right">
+       <button  type="button" class="btn btn-info" onclick='valuecheck()'>Vertify</button>
+       <button  type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id = "deploy_commit">Commit</button>
+
+    </div>
+        <div class="form-group text-center">
+            <p id ='saveinfo'></p>
+        </div>
+
+</form>

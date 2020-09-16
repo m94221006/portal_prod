@@ -1,0 +1,918 @@
+{% load lookglass_extras %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
+
+
+<script type="text/javascript">
+        var loadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div>';
+        var uid = uuidv4();
+        var ws_ip = "{{ ws_ip }}";
+        var ws_port = "{{ ws_port }}";
+        var data = null;
+        var chart =null;
+        var row_index = 0;
+        var total_row = 0;
+        var point_list= null;
+        var total_time_list =null;
+        var curl_host = '';
+        var queue = null;
+        var Lock = false;
+        var play_times = 10;
+        var refresh_count = 0;
+        var play_sign=false;
+        var timeoutid = 0;
+        var username = '{{ username}}';
+        var play_monitor_id = 0
+
+        $(document).ready(function () {
+          
+          $('#lgpoint').multiselect({
+            enableClickableOptGroups: true,
+            enableCollapsibleOptGroups: true,
+            enableFiltering: true,
+            includeSelectAllOption: true,
+            buttonWidth: '300px',
+            maxHeight: 500,
+            buttonText: function(options, select) 
+            {
+                if (options.length === 0) {return '---監控點---';}
+                else if (options.length > 3){return '己選擇'+options.length+'個監控點!';}
+                else 
+                {
+                     var labels = [];
+                     options.each(function() 
+                     {
+                         if ($(this).attr('label') !== undefined) {labels.push($(this).attr('label'));}
+                         else {labels.push($(this).html());}
+                     });
+                     return labels.join(', ') + '';
+                 }
+            }
+        
+           });
+           $('#lgcommand').selectpicker();
+           $('#nslookuptype').selectpicker();
+           
+             // command change event
+           $('#lgcommand').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue) {
+                $(".tag").hide();
+                $("#curlhead").hide();
+                $("#wsorigin").hide();
+
+                var command = $("#lgcommand :selected" ).text();
+                if(command == 'dig' || command=='nslookup'){$("#dnstag").show();}
+                else if(command=='ws'){$("#curltag").show();}
+                else{$("#"+command+"tag").show();}
+                if(command == 'curl' || command == 'ws'){
+                    $("#curlhead").show();
+                    if (command == 'ws'){
+                        $("#wsorigin").show();
+                    }
+                }
+                changeplaceholder(command);
+           })
+            // command checkbox event
+           $('.tagck').change(function() {
+                var command = $('#lgcommand option:selected').text();
+                $("."+command+"text").prop('disabled', true);
+                $("#nslookuptype").prop('disabled', true);
+                $("#nslookuptype").selectpicker('refresh');
+                if($(this).is(":checked")) {                    
+                    $("."+command+"text").attr('disabled', false);
+                    if(command == 'nslookup'|| command == 'dig')
+                    {
+                        $(".nslookuptext").attr('disabled', false);
+                        $("#nslookuptype").prop('disabled', false);
+                        $("#nslookuptype").selectpicker('refresh');
+                    }
+                }
+            });
+
+            //look glass event
+           $('#looking_glass').on("click",function (event) {
+                data = getlgvalues();
+
+                if(data["lg_name"] =="" || data["lg_command"]=="" || data["lg_host"] =="")
+                {
+                    alert('please select choose the right site and input the right host');
+                }
+                else
+                {
+                    if(data["lg_command"] == 'curl' || data["lg_command"] == 'har' )
+                    {
+                        if(!isUrl(data['lg_host']))
+                        {
+                            alert("please input the right format for http or https host");
+                        }
+                        else{
+                            lookingglass(data); 
+                            timeoutid = setTimeout(clearalldisable,30000);
+
+                       } 
+                    }   
+                    else{
+                        lookingglass(data); 
+                        timeoutid = setTimeout(clearalldisable,30000);
+
+                    } 
+                    
+                }
+            });
+
+            $("#readme").click(function(){
+                var readmehtml = $("#readmecontent").html();
+                var notify= notifyMsg(readmehtml);
+            });
+
+            $('#lgv2_table').treegrid({
+                expanderExpandedClass: 'fas fa-minus',
+                expanderCollapsedClass: 'fas fa-plus',
+                striped : true,
+                bordered: true
+            });
+       
+            $('#chartTable').on('hidden.bs.modal', function (e) {
+                play_sign = false;
+                //closeSocket();
+            })    
+             
+            websocket_start();               
+        })
+        
+        function isUrl(s) {
+            var regexp = /(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/
+            return regexp.test(s);
+        }
+
+        function changeplaceholder(command)
+        {           
+            if(command == 'nslookup' || command=='dig'){
+                $("#lghost").attr("placeholder", "Type a dns: www.google.com");
+            }
+            else  if( command == 'tcping' || command =='ping' || command =='telnet'){
+                $("#lghost").attr("placeholder", "Type a dns or ip: www.google.com or 8.8.8.8");
+
+            }
+            else  if(command == 'curl' ){
+                $("#lghost").attr("placeholder", "type a web host:http://www.google.com");
+            }
+        }
+
+        function getlgvalues()
+        {
+            var lg_origin = $('#wsorigin').val();
+            var lg_host = $('#lghost').val();
+            var lg_name =$("#lgpoint :selected").map(function(i, el) {
+                 return $(el).text();
+            }).get();
+            var lg_id =$("#lgpoint :selected").map(function(i, el) {
+                 return $(el).val();
+            }).get();
+            var command = $('#lgcommand option:selected').val();
+            var curl_domain ="";
+            var curl_ip ="";
+            var curl_port ="";
+            var nslookup_type  ="";
+            var nslookup_dns  ="";
+            var tcp_port = $('#tcpport').val();
+            curl_host = lg_host
+
+            if(command == 'curl' || command == 'websocket') {    
+                if ($('#curlivk').is(":checked")){
+                    lg_host = ' -ivk '+ lg_host;
+                }
+                if($('#curlheader').is(":checked")){
+                    lg_host = ' -I '+ lg_host;
+               }
+            }
+            if($('#curlck').is(":checked")){
+                curl_domain = $('#curldomain').val();
+                curl_ip = $('#curlip').val();
+                curl_port = $('#curlport').val();
+            }
+            if($('#nslookupck').is(":checked")){
+                nslookup_type = $('#nslookuptype option:selected').val();
+                nslookup_dns = $('#nslookupdns').val();
+            }
+                            
+            var  dict = {
+                    'uid': uid,
+                    'lg_name': lg_name.join(";"),
+                    'lg_id': lg_id.join(";"),
+                    'lg_command': command,
+                    'lg_host': lg_host.trim(),
+                    'lg_origin':lg_origin,
+                    'curl_domain': curl_domain,
+                    'curl_port': curl_port,
+                    'curl_ip': curl_ip,
+                    'tcp_port': tcp_port,
+                    'nslookup_type':nslookup_type,
+                    'nslookup_dns':nslookup_dns,
+                    'msg_type':'server_result_message',
+                    'msg_times':1,
+                    'token':gtoken,
+                    'username':gusername
+                };
+                console.log(dict)
+                return dict
+
+        }
+
+
+        function lookingglass(data){
+            Lock = true;
+            row_index = 0;
+            total_row =0;
+            refresh_count=0;
+            total_time_list = [];
+            point_list=[];
+            $("#m_search_area").find("input,select,textarea,button").prop("disabled",true);
+            initial_result_ui_v2(data.lg_command);
+            delete data.lg_name;
+            $.getJSON( "lookglass/looking_glass_v2",data, function(res) {
+                console.log(res.status_code);
+
+            });  
+          } 
+        
+        
+        function lgv2_refresh(monitor_id){
+            refresh_count =refresh_count+1;
+            data.msg_type ='server_result_message';
+            data.msg_times = 1;
+            data.lg_id = monitor_id;
+            $("#status_"+monitor_id).html(loadinghtml);
+            $.getJSON( "lookglass/looking_glass_v2",data, function(res) {
+                console.log(res.status_code);
+            });  
+        }
+
+        function lgv2_play(monitor_id){
+            play_sign = true;
+            row_index = 0;
+            generate_chart(monitor_id);
+            data.msg_type ='play_result_message';
+            data.msg_times = play_times;
+            data.lg_id = monitor_id;
+            play_monitor_id = monitor_id;
+            $.getJSON( "lookglass/looking_glass_v2",data, function(res) {
+                console.log(res.status_code);
+            });   
+
+       }
+
+        function notifyMsg(msg){
+            var notify =  $.notify({
+            // options
+            icon: 'glyphicon glyphicon-info-sign',
+            title: '提示',
+            message: msg,
+            target: '_blank'
+        },{
+            // settings
+            element: 'body',
+            position: null,
+            type: "info",
+            allow_dismiss: true,
+            newest_on_top: true,
+            showProgressbar: false,
+            placement: {
+                from: "top",
+                align: "right"
+            },
+            offset: 20,
+            spacing: 10,
+            z_index: 1031,
+            delay:60000,
+            url_target: '_blank'
+        });
+
+       return notify;
+    }
+
+        function createSocket(){
+
+            var url = 'ws://'+ws_ip+':'+ ws_port +'/ws/tools/'+uid+'/';
+            gobalsocket = new ReconnectingWebSocket(url);
+            gobalsocket.onopen = function(event) {
+                console.log('I am the tool client and I\'m listening:'+uid);
+                gobalsocket.onmessage = function(e) {
+                    var msg = JSON.parse(e.data);
+                    switch(msg.type) {
+                        case "server_result_message":
+                              updateResult(msg.test_result);
+                              break;
+                        case "play_result_message":
+                              updatePlayResult(msg.round,msg.test_result);
+                              break;
+                        }
+                };
+                    
+                gobalsocket.onclose = function(e) {
+                    console.log("close code:"+e.code);
+                    if (e.code != 1000) {
+                        createSocket();
+                      }
+                   };
+                }
+                gobalsocket.onerror=function(event){
+                    console.log('ws normal error: ' + event.data);
+                    createSocket();
+
+                }
+        }
+        
+        function closeSocket()
+        {
+            if(refresh_count ==0 && play_sign == false)
+            {
+                if (gobalsocket.readyState === WebSocket.OPEN) {
+                    gobalsocket.close();
+                }    
+            }   
+         }
+
+        function initial_result_ui_v2(command)
+        {
+           
+            if(command == 'curl'){
+                initial_curl_ui();
+            }
+            else if(command == 'har'){
+                initial_har_ui();
+            }
+            else{
+                initial_ui();
+            }
+
+        }
+
+        function initial_ui()
+        {
+            var f_tab_name = 'Answer Section';
+            var s_tab_name = 'Content';
+            point_list=$("#lgpoint :selected").map(function(i, el) { return $(el).attr('id'); }).get();
+            var region_list =[];
+            var monitor_list =[];
+            var show_html ="<table id = 'lgv2_table' class='table table-bordered'><thead><tr><th>region</th><th>node name</th><th>status</th><th>total time</th></tr></thead><tboby>";
+            for(var i=0 ;i<point_list.length;i++)
+            {
+                var point = point_list[i];
+                var term = point.split("-");
+                var region_name = term[0];
+                var region_id = term[1];
+                var monitor_name = term[2];
+                var monitor_id = term[3];
+                monitor_list.push(monitor_id);
+                show_html = show_html+ "<tr class='treegrid-"+region_id+"-"+ monitor_id +" id='monitor-"+ monitor_id +"'><td>"+region_name+"</td><td>"+monitor_name+"<button class='btn btn-default lgv2refresh' onclick='lgv2_refresh("+monitor_id+")' disabled><span class='fa fa-refresh'></span></button></td>"+
+                                        "<td><span id ='status_"+monitor_id+"'>"+loadinghtml +"</span></td><td><span id ='totaltime_"+monitor_id+"'></span></td></tr>";
+            
+                show_html = show_html+"<tr class='treegrid-tab-"+monitor_id+"-"+region_id+" treegrid-parent-"+region_id+"-"+ monitor_id +"'><td colspan='3'>"+
+                                              "<div class='card card-nav-tabs'><div class='card-header card-header-primary'><div class='nav-tabs-navigation'><div class='nav-tabs-wrapper'>"+
+                                              "<ul class='nav nav-tabs' data-tabs='tabs' role='tablist'>"+
+                                             "<li class='nav-item'><a class='nav-link active' href='#firsttab_"+monitor_id+"' data-toggle='tab'>"+f_tab_name+"</span></a></li>"+
+                                              "<li class='nav-item'><a class='nav-link' href='#secondtab_"+monitor_id+"' data-toggle='tab'>"+s_tab_name+"</a></li></ul></div></div></div>"+
+                                              "<div class='card-body'><div class='tab-content'>"+
+                                              "<div class='tab-pane active' id='firsttab_"+monitor_id+"'><h3>Header</h3></div>"+
+                                              "<div class='tab-pane fade' id='secondtab_"+monitor_id+"'><h3>body</h3></div>"+
+                                              "</div></div></div></td></tr>";
+             }
+            show_html =show_html+"</tboby></table>";
+
+            $("#lgv2_content").html(show_html);   
+            $('#lgv2_table').treegrid({
+                        expanderExpandedClass: 'fas fa-minus',
+                        expanderCollapsedClass: 'fas fa-plus',
+                        striped : true,
+                        bordered: true,
+                        initialState:'collapsed'
+            }); 
+ 
+        }
+
+        function initial_curl_ui(command)
+        {
+            $("#runloading").html(loadinghtml);
+            point_list=$("#lgpoint :selected").map(function(i, el) { return $(el).attr('id'); }).get();
+            //queue = new Queue(point_list.length);
+            var region_list =[];
+            var monitor_list =[];
+            var interval = [5,10,15];
+            var show_html ="";
+            show_html = show_html+"<table id = 'lgv2_table' class='table table-bordered'><thead><tr><th>region</th><th>node name</th><th>status</th><th>total time</th></tr></thead><tboby></tboby></table>";
+            $("#lgv2_content").html(show_html);
+        }
+        
+        function initial_har_ui(command)
+        {
+            $("#runloading").html(loadinghtml);
+            point_list=$("#lgpoint :selected").map(function(i, el) { return $(el).attr('id'); }).get();
+            //queue = new Queue(point_list.length);
+            var region_list =[];
+            var monitor_list =[];
+            var interval = [5,10,15];
+            var show_html ="";
+            show_html = show_html+"<table id = 'lgv2_table' class='table table-bordered'><thead><tr><th>region</th><th>node name</th><th>status</th><th>harfile</th></tr></thead><tboby></tboby></table>";
+            $("#lgv2_content").html(show_html);
+        }
+        
+        function row_content(command,region_name,monitor_name,monitor_id)
+        {
+            var showhtml = '';
+            if(command == 'curl'){
+                showhtml = curl_row_content(command,region_name,monitor_name,monitor_id);
+            }
+            else if(command == 'har'){
+                showhtml =har_row_content(command,region_name,monitor_name,monitor_id);
+            }
+            return showhtml
+        }
+
+        function curl_row_content(command,region_name,monitor_name,monitor_id)
+        {
+            var f_tab_name = 'Header';
+            var s_tab_name = 'Content';
+            if(command =='dig'){
+                f_tab_name ='Answer Section'
+            }
+            var show_html = "<tr class='treegrid-"+ monitor_id +" id='monitor-"+ monitor_id +"'><td>"+region_name+"</td><td id='monitorname"+monitor_id+"'>"+monitor_name+"<button class='btn btn-default lgv2refresh' onclick='lgv2_refresh("+monitor_id+")' disabled><span class='fa fa-refresh'></span></button>"+
+                            "<button class='btn btn-default lgv2play' data-toggle='modal' data-target='#chartTable' onclick='lgv2_play("+monitor_id+")' disabled><span class='fa fa-play'></span></button></td>"+
+                            "<td><span id ='status_"+monitor_id+"'>"+loadinghtml +"</span></td><td><span id ='totaltime_"+monitor_id+"'></div></td></tr>";
+            //$('#lgv2_table tr').eq(row_index).after(show_html);
+
+            show_html = show_html+ "<tr class='treegrid-tab-"+monitor_id+" treegrid-parent-"+ monitor_id +"'><td colspan='4'>"+
+                                              "<div class='card card-nav-tabs'><div class='card-header card-header-primary'><div class='nav-tabs-navigation'><div class='nav-tabs-wrapper'>"+
+                                              "<ul class='nav nav-tabs' data-tabs='tabs' role='tablist'>"+
+                                              "<li class='nav-item'><a class='nav-link active' href='#firsttab_"+monitor_id+"' data-toggle='tab'>"+f_tab_name+"</span></a></li>"+
+                                              "<li class='nav-item'><a class='nav-link' href='#secondtab_"+monitor_id+"' data-toggle='tab'>"+s_tab_name+"</a></li></ul></div></div></div>"+
+                                              "<div class='card-body'><div class='tab-content'>"+
+                                              "<div class='tab-pane active' id='firsttab_"+monitor_id+"'><h3>Header</h3></div>"+
+                                              "<div class='tab-pane fade' id='secondtab_"+monitor_id+"'><h3>body</h3></div>"+
+                                              "</div></div></div></td></tr>";
+            //$('#lgv2_table tr').eq(row_index+1).after(show_html);
+
+            return show_html;
+        }
+        
+        function har_row_content(command,region_name,monitor_name,monitor_id)
+        {
+            var f_tab_name = 'Header';
+            var s_tab_name = 'Content';
+            if(command =='dig'){
+                f_tab_name ='Answer Section'
+            }
+            var show_html = "<tr class='treegrid-"+ monitor_id +" id='monitor-"+ monitor_id +"'><td>"+region_name+"</td><td id='monitorname"+monitor_id+"'>"+monitor_name+
+                            "<button class='btn btn-default lgv2refresh' onclick='lgv2_refresh("+monitor_id+")'><span class='fa fa-refresh'></span></button></td>"+
+                            "<td><span id ='status_"+monitor_id+"'>"+loadinghtml +"</span></td><td><span id ='totaltime_"+monitor_id+"'></div></td></tr>";
+            show_html = show_html+ "<tr class='treegrid-tab-"+monitor_id+" treegrid-parent-"+ monitor_id +"'><td colspan='4'>"+
+                                    "<div id='hartotal_"+monitor_id+"'></div>"+
+                                    "<div id='legend-holder_"+monitor_id+"'></div>"+
+                                    "<select id='page-selector_"+monitor_id+"' class='page-selector_"+monitor_id+"'></select>"+
+                                    "<div id='haroutput_"+monitor_id+"'></div></div></td>";
+
+            return show_html;
+        }
+        
+        function updateResult(test_result){
+            var res = JSON.parse(test_result);
+            var tag_index = res.tag_index;
+            var monitor_ip = res.monitor_ip;
+            var status_code =res.status_code;
+            var total_time =  res.total_time;
+            var header =  res.header;
+            var body =  res.body;
+            var command = res.command;
+            var region_name = res.region_name
+            var monitor_name = res.monitor_name
+            var downlink = res.downlink;
+            row_index =row_index +1;
+            if(command == 'curl' || command =='har')
+            {
+                if($("#status_"+tag_index).length > 0) // for refresh
+                {
+                    monitor_content_update(command,tag_index,status_code,total_time,downlink,header,body);
+                    refresh_count=refresh_count-1;
+                    //closeSocket()
+                }
+                else
+                {
+                    var initial_html = row_content(command,region_name,monitor_name,tag_index);
+                    var time_index = gettimeindex(status_code,total_time);
+
+                    // add the row
+                    tableaddrow(time_index[0],initial_html);
+                    //$('#lgv2_table tr').eq(time_index[0]).after(initial_html);
+                    //$('#lgv2_table').treegrid({
+                    //        expanderExpandedClass: 'fas fa-minus',
+                    //        expanderCollapsedClass: 'fas fa-plus',
+                    //        striped : true,
+                    //        bordered: true,
+                    //        initialState:'collapsed'
+                    //}); 
+                    monitor_content_update(command,tag_index,status_code,total_time,downlink,header,body);
+                    Lock = false;
+                    var rowCount = ($('#lgv2_table tr').length-1)/2;
+
+                    if(rowCount == point_list.length){
+                        $('#runloading').empty();
+                        $("#m_search_area").find("input,select,textarea,button").prop("disabled",false);
+                        $('.lgv2refresh').removeAttr("disabled");
+                        $('.lgv2play').removeAttr("disabled");
+                        clearTimeout(timeoutid);
+                        //closeSocket();
+                    }
+                }
+            }
+            else // not for curl
+            {
+                if(refresh_count > 0) // for refresh
+                {
+                    monitor_content_update(command,tag_index,status_code,total_time,downlink,header,body);
+                    refresh_count=refresh_count-1;
+                    //closeSocket();
+                }
+                else{
+                    monitor_content_update(command,tag_index,status_code,total_time,downlink,header,body);
+                    var rowCount = ($('#lgv2_table tr').length-1)/2;
+
+                    if(row_index == point_list.length){
+                        $("#m_search_area").find("input,select,textarea,button").prop("disabled",false);
+                        $('.lgv2refresh').removeAttr("disabled");
+                        clearTimeout(timeoutid);
+                        //closeSocket();
+                    }
+                }
+
+            }
+            console.log("row:"+row_index+",length:"+point_list.length +",rowCount:"+rowCount)
+
+        }
+
+        function updatePlayResult(round,test_result)
+        {
+             var res = JSON.parse(test_result);
+             if(res.tag_index == play_monitor_id)
+             {
+                addChartData(round,res);
+                addcharttable(round+1,res);
+             }
+
+        }
+        function monitor_content_update(command,tag_index,status_code,total_time,downlink,header,body)
+        {
+            $("#firsttab_"+tag_index).html(header);
+            if(command == 'curl' || command == 'websocket')
+            {   if(header){
+                    var itemlist = header.split('<br/>');
+                    var resolve_ip = '';
+                    
+                    if(itemlist[0].indexOf('resolve ip') >= 0){
+                        resolve_ip =itemlist[0].replace("resolve ip:","")
+                    }
+                    if(itemlist[0].indexOf('not resolve') >= 0){
+                        status_code=408
+                    }
+                }
+                curl_show(tag_index,status_code,total_time,resolve_ip,body);
+            }
+            else if(command == 'har')
+            {
+                har_show(tag_index,status_code,total_time,downlink,header,body);
+            }
+            else{
+                $("#totaltime_"+tag_index).html(total_time);
+                $("#status_"+tag_index).html(status_code);
+                $("#secondtab_"+tag_index).html(body);
+            }
+        }
+        
+        function curl_show(tag_index,status_code,total_time,resolve_ip,body)
+        {
+            var tmp_time = total_time;
+            var color = getltcolor(status_code,total_time);
+            if(resolve_ip!=''){$("#status_"+tag_index).html("<span style='color:"+color+"'>"+status_code+"("+resolve_ip+")</span>");}
+            else{$("#status_"+tag_index).html("<span style='color:"+color+"'>"+status_code+"</span>");}
+            $("#totaltime_"+tag_index).html("<span style='color:"+color+"'>"+total_time+"</span>");
+            if(body!=null && body.indexOf("\n")>0){
+                body = body.replace("\n","<br/>");
+            }
+            $("#secondtab_"+tag_index).html("<textarea rows='15' cols='120' readonly>"+body+"</textarea>");
+     
+        }
+        
+        function har_show(tag_index,status_code,total_time,downlink,header,body)
+        {
+            var download_url = "/lookglass/lg_down?lg_id="+tag_index +"&url="+ downlink;
+
+            if (status_code== 408){ $("#status_"+tag_index).html("<span style='color:red'>"+header+"</span>");}
+            else{ $("#status_"+tag_index).html("<span style='color:black'>"+header+"</span>");}
+            $("#totaltime_"+tag_index).html('<button type="button" class="btn">'+
+                '<a href="'+ download_url +'" target="_blank"><span class="fa fa-download"></span></a></button>');
+            
+            if (body!= null)
+            {
+                var pageSelectorEl = document.getElementById("page-selector_"+tag_index);
+                var legendHolderEl = document.getElementById("legend-holder_"+tag_index);
+                var perfCascadeOptions = {
+                        showAlignmentHelpers: true, //default: true
+                        showIndicatorIcons: true, //default: true
+                        selectedPage: 1,
+                        pageSelector: pageSelectorEl, //default: undefined
+                        legendHolder: legendHolderEl, //default: undefined (hide-legend)
+                        showUserTiming: true, //default: false
+                        showUserTimingEndMarker:true
+                }
+                var perfCascadeSvg = perfCascade.fromHar(body, perfCascadeOptions);
+                $("#haroutput_"+tag_index).append(perfCascadeSvg);
+            }
+        }
+        
+        function generate_chart(monitor_id){
+            var monitor_name = $("#monitorname"+monitor_id).text();
+            $("#chartbody").html("<canvas id='myChart-"+monitor_id+"'></canvas>"+
+                                 "<div class='text-center' id='chartrunloading'>"+loadinghtml+"</div>"+
+                                 "<table id = 'charttable-"+monitor_id+"' class='table table-bordered'><thead><tr><th>item</th><th>status</th><th>total time</th></tr></thead><tboby></tboby></table>");
+            $("#chart-title").html(curl_host);
+
+            var ctx = document.getElementById('myChart-'+monitor_id).getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: monitor_name+'-loading time',
+                        fill: false,
+                        backgroundColor: 'rgb(30,144,255)',
+                        borderColor: 'rgb(30,144,255)',
+                    }],
+                },
+                // Configuration options go here
+                options: {
+                    responsive: true,
+                    tooltips: {
+                        mode: 'index',
+                        intersect: true
+                    }
+                }
+             });
+        }
+        
+        function addChartData(label, res) {
+            var tag_index = res.tag_index;
+            var monitor_ip = res.monitor_ip;
+            var status_code =res.status_code;
+            var total_time =  res.total_time;
+            var header =  res.header;
+            var body =  res.body;
+            var command = res.command;
+            var tmp_time = total_time;
+            if (status_code== 200 || status_code== 301 || status_code== 302  || status_code== 101){ 
+                if(tmp_time!=null){
+                    tmp_time = tmp_time.replace("0m","").replace("s","");
+                }
+                var loading_time =parseFloat(tmp_time);
+                chart.data.labels.push(label);
+                chart.data.datasets.forEach((dataset) => {
+                    dataset.data.push(loading_time);
+                });
+                chart.update();
+            }
+        }
+       
+        function addcharttable(round, res) {
+            var tag_index = res.tag_index;
+            var monitor_ip = res.monitor_ip;
+            var status_code =res.status_code;
+            var total_time =  res.total_time;
+            var header =  res.header;
+            var body =  res.body;
+            var command = res.command;
+            var tmp_time = total_time;
+            var color = getltcolor(status_code,total_time);
+            var initial_html = "<tr><td>"+round+"</td><td>"+status_code+"</td><td><span style='color:"+color+"'>"+total_time+"</span></td></tr>";
+            $("#charttable-"+tag_index+" tr").eq(0).after(initial_html); 
+            row_index= row_index+1;
+            if(row_index == play_times){
+                $('#chartrunloading').empty();
+                play_sign = false;
+                //closeSocket();
+            }
+        }
+        function tableaddrow(index,rowhtml)
+        {
+            $('#lgv2_table tr').eq(index).after(rowhtml); 
+            $('#lgv2_table').treegrid({
+                expanderExpandedClass: 'fas fa-minus',
+                expanderCollapsedClass: 'fas fa-plus',
+                striped : true,
+                bordered: true,
+                initialState:'collapsed'
+            }); 
+        }
+       
+        function gettimeindex(status_code,total_time)
+        {
+            var index = 0;
+            var loading_time =getloadingtime(status_code,total_time);
+            total_time_list.push(loading_time);
+            total_time_list.sort(sortFloat)
+            index = total_time_list.indexOf(loading_time);
+            index = index*2;
+            return [index,loading_time];
+        }
+
+        function getloadingtime(status_code,total_time)
+        {
+            var loading_time = 15;
+            if (status_code!= 408)
+            { 
+                if(total_time!=null)
+                {
+                    total_time = total_time.replace("0m","").replace("s","");
+                }
+                loading_time =parseFloat(total_time);
+            }
+            return loading_time;
+        }
+
+        function sortFloat(a,b) { return b-a; }
+
+        function getltcolor(status_code,total_time)
+        {
+            var color = 'black';
+            if (status_code== 200 || status_code== 301 || status_code== 302  || status_code== 101 || status_code== 307 ){ 
+                if(total_time!=null){
+                    total_time = total_time.replace("0m","").replace("s","");
+                }
+                var loading_time =parseFloat(total_time);
+                if (loading_time >=5 && loading_time<10){color = '#FFC300';}
+                else if(loading_time>=10){color = 'red';}
+            }
+            else{color = 'red';}
+            return color;
+        }
+        
+        function clearalldisable()
+        {
+            $("#m_search_area").find("input,select,textarea,button").prop("disabled",false);
+        }
+        
+        function uuidv4() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+          });
+       }
+
+
+       function websocket_start()
+       {
+           if(gobalsocket== null || gobalsocket.readyState!= WebSocket.OPEN)
+           {
+               createSocket();
+           }
+       }
+
+
+
+</script>
+
+
+<div id='m_search_area'>
+<div class='row'>
+        <div class="input-group mb-3">
+            <div class="input-group-prepend">
+                <select id = "lgpoint" multiple="multiple" class="form-control">
+                        {% for region in regionlist %}
+                        <optgroup label="{{ region.ch_name }}-{{ region.en_name }}({{ monitorlist|region_in_count:region.ch_name }})" class="group-"+region.id>
+                            {% for monitor in monitorlist|monitor_in_region:region.ch_name  %}
+                                <option id='{{ region.ch_name }}-{{ region.id }}-{{ monitor.ch_name }}-{{ monitor.id }}' value="{{ monitor.id }}" >{{ monitor.ch_name }}</option>
+                            {% endfor %} 
+                        </optgroup>
+                        {% endfor %}
+                </select>   
+                <select id = "lgcommand" class="selectpicker" title="指令" data-width="40%">
+                        <option value="curl">curl</option>
+                        <option value="websocket">ws</option>
+                        <option value="dig">dig</option>
+                        <option value="ping">ping</option>
+                        <option value="tcping">tcping</option>
+                        <option value="har">har</option>
+                </select>
+                
+                <div class='input-group-text' id="curlhead" style="display:none">
+                        <input type="checkbox" id='curlheader' aria-label="Checkbox  for following text input">
+                        <label class="form-check-label" for="curlheader">&nbsp;-I</label>&nbsp;
+                        <input type="checkbox" id='curlivk' aria-label="Checkbox  for following text input">
+                        <label class="form-check-label" for="curlivk">&nbsp;-ivk</label>
+                </div>
+            </div>
+            
+            &nbsp;<a href="#" data-toggle="tooltip" title="點我提示" id ='readme'><span class="fas fa-info-circle"></span></a>&nbsp;
+            <input type="text" class="form-control" placeholder="type a web host:http://www.google.com" id ="lghost">&nbsp;
+            <input type="text" class="form-control" placeholder="origin" id="wsorigin"" style="display:none">
+            <div class='tag' id="tcpingtag" style="display:none" class="col-sm-1">
+                    <div class="input-group">
+                        <input type="text" class="form-control" placeholder="port" id="tcpport">
+                    </div>
+            </div>
+            <button type="button" id = "looking_glass" class="btn btn-outline-info">run</button>
+
+        </div>
+</div>
+
+<div class='tag' id="dnstag" style="display:none">
+    <div class="col-md-6">
+
+        <div class="input-group">
+          <div class="input-group-prepend">
+            <div class="input-group-text">
+                <input type="checkbox" id='nslookupck' class='tagck' aria-label="Checkbox  for following text input">
+                <label class="form-check-label" for="nslookupck">&nbsp;type/server</label>
+            </div>
+          </div>
+          <select aria-label="Text input with checkbox" id = "nslookuptype" class="selectpicker nslookuptext" title="type" data-width="20%" disabled>
+                <option value="a">a</option>
+                <option value="any">any</option>
+                <option value="ns">ns</option>
+
+         </select>
+        <input type="text" class="form-control nslookuptext" placeholder="dns server"  id="nslookupdns" aria-label="Text input with checkbox" disabled>
+        </div>
+    </div>
+ </div>
+
+<div class='row tag' id="curltag" style="display:none">
+ <div class="col-md-8">
+    <div class="input-group">
+            <div class="input-group-prepend">
+              <div class="input-group-text">
+                <input type="checkbox" id='curlck' class='tagck' aria-label="Checkbox  for following text input">
+                <label class="form-check-label" for="curlck">&nbsp;--resolve</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+                <input type="text" class="form-control curltext" placeholder="domain"  id='curldomain'  aria-label="Text input with checkbox" disabled>
+            </div>
+            <div class="col-md-2">
+                <input type="text" class="form-control curltext" placeholder="port"  id='curlport'  aria-label="Text input with checkbox" disabled>
+            </div>
+            <div class="col-md-3">
+                <input type="text" class="form-control curltext " placeholder="ip" id='curlip'  aria-label="Text input with checkbox" disabled>
+            </div>
+
+    </div>
+</div>
+</div>
+
+<div class='row' id='readmecontent' style="display:none">
+<table class="table table-fixed table-borderless">
+    <tbody>  
+         <tr>
+             <td><h5><span class="badge badge-light">curl</span></h5></td>
+             <td>
+                <p>-I &nbsp; Show document info only(仅显示响应文档头)</p>
+                <p>-L &nbsp; Show document info only(跟踪重定向 (H))</p>
+                <p>-i &nbsp; Include protocol headers in the output (H/F)(在输出中包含协议头 (H/F))</p>
+                <p>-v &nbsp;  Make the operation more talkative(显示详细操作信息)</p>
+                <p>-k &nbsp; Allow connections to SSL sites without certs (H)(允许连接到 SSL 站点，而不使用证书 (H))</p>
+            </td>
+        </tr>
+        <tr>
+                <td><h5><span class="badge badge-light">nslookup/dig</span></h5></td>
+                <td>
+                   <p> nslookup -type=Type domain(網域名稱) NameServer / dig @NameServer domain(網域名稱) Type</p>
+                   <p>Type 參數：</p>
+                   <p>a &nbsp; Specifies a computer's IP address(指定的電腦名稱'IP 位址)</p>
+                   <p>any &nbsp; any and all available data(顯示全部ns資訊)</p>
+                   <p>ns &nbsp; Specifies a DNS name server for the named zone.(指定的具名區域的 DNS 名稱伺服器)</p>
+               </td>
+        </tr>
+
+    </tbody>
+  </table>
+</div>
+<div class="text-center" id='runloading'></div>
+</div>
+
+<div id ="lgv2_content" class="row">
+
+</div> 
+      
+<div id="chartTable" class="modal fade" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+      <div  class="modal-content">
+        <div class="modal-header">
+          <h5 id='chart-title' class="modal-title"></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div id ='chartbody' class="modal-body">
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+</div>

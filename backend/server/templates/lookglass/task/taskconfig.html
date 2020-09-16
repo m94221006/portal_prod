@@ -1,0 +1,321 @@
+
+{% load lookglass_extras %}
+<script type="text/javascript">
+    var saveloadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">Saving now...</span></div>';
+    $(document).ready(function () {    
+            $('#tasktime').datetimepicker({ format: 'YYYY/MM/DD HH:mm'});
+            $('#tasknodes').multiselect({
+                    enableClickableOptGroups: true,
+                    enableCollapsibleOptGroups: true,
+                    enableFiltering: true,
+                    includeSelectAllOption: true,
+                    buttonWidth: '100%',
+                    maxHeight: 500,
+                    buttonText: function(options, select) 
+                    {
+                        if (options.length === 0) {return '---監控點---';}
+                        else if (options.length > 3){return '己選擇'+options.length+'個重要監控點!';}
+                        else 
+                        {
+                            var labels = [];
+                            options.each(function() 
+                            {
+                                if ($(this).attr('label') !== undefined) {labels.push($(this).attr('label'));}
+                                else {labels.push($(this).html());}
+                            });
+                            return labels.join(', ') + '';
+                        }
+                    }
+            });
+
+            set_task_validate_rule();  
+
+            $( "#taskcommand" ).change(function() {
+                $(".tag").hide();
+                $("#tasktcpport").prop('disabled', true);
+
+                var taskcommand = $("#taskcommand :selected").val();
+                $("#"+taskcommand+"part").show();
+                
+                if(taskcommand =='curl'){
+                    $("#curlheader").prop('checked', false);
+                    $("#curlivk").prop('checked', false);
+                }
+                if(taskcommand =='tcping'){
+                    $("#tasktcpport").prop('disabled', false);
+                }
+                $("#"+taskcommand+"ck").prop('checked', false);
+                $("#"+taskcommand+"ckpart").find("input,select,textarea,button").prop("disabled",true);
+
+                // adjust validation rule //
+                if(taskcommand =='curl' || taskcommand == "har"){
+                    $('#taskhost').rules('add',  { cus_url: true });
+                    $('#taskhost').rules('remove','ip_host');
+                }
+                else{
+                    $('#taskhost').rules('add',  { ip_host: true });
+                    $('#taskhost').rules('remove','cus_url');
+                }
+             });
+
+            $('.tagck').change(function() {
+                var id = $(this).attr('id');
+                if($(this).is(":checked")) {  
+                    $("#"+id+"part").find("input,select,textarea,button").prop("disabled",false);
+                }
+                else{
+                    $("#"+id+"part").find("input,select,textarea,button").prop("disabled",true);
+                }
+            });
+
+            $('#task_commit').on("click",function (event) {
+                var data = vertify_task();
+                if(data){
+                    console.log(data);
+                    //$("#taskconfigform").find("input,select,textarea,button").prop("disabled",true);
+                    $("#tasksaveinfo").html(saveloadinghtml);
+                    $.post("lookglass/task_config/",data,function(res){
+                        if(res.status_code == 200){
+                           $('#configmodal').modal('hide');
+                            $('.modal-backdrop').remove();
+                            console.log(res);
+                            getContent(); 
+                        }
+                        else{
+                            console.log(res);
+                            $("tasksaveinfo").html(res.message);
+                        }
+                    });
+                }
+            });
+    })
+
+    function vertify_task()
+    {
+        if($("#taskconfigform").valid()){
+            var taskname = $("#taskname").val();
+            var taskstarttime = $("#taskstarttime").val();
+            var taskevery = $("#taskevery").val();
+            var taskperiod = $("#taskperiod :selected").val();
+            var tasktimes =  $("#tasktimes").val();
+            var taskcommand =  $("#taskcommand").val();
+            var taskhost = $("#taskhost").val();
+            var tasknodes =$("#tasknodes :selected").map(function(i, el) {return $(el).val();}).get().join(";");
+            var curl_domain ="";
+            var curl_ip ="";
+            var curl_port ="";
+            var digtype ="";
+            var digdns ="";
+            var tcp_port ="";
+            if(taskcommand == 'curl'){
+                if ($('#curlivk').is(":checked")){
+                        taskhost = ' -ivk '+ taskhost;
+                    }
+                if($('#curlheader').is(":checked")){
+                        taskhost = ' -I '+ taskhost;
+                }
+                if($('#curlck').is(":checked")){
+                    curl_domain = $('#curldomain').val();
+                    curl_ip = $('#curlip').val();
+                    curl_port = $('#curlport').val();
+                }
+            }
+            if(taskcommand == 'dig'){
+                    digtype = $('#digtype option:selected').val();
+                    digdns = $('#digdns').val();
+            }
+            if(taskcommand == 'tcping'){
+                    tcp_port = $('#tasktcpport').val();
+            }
+            var postdata = {
+                    'token':gtoken,
+                    'username':gusername,
+                    'action': 'new',
+                    'taskstarttime':taskstarttime,
+                    'taskperiod':taskperiod,
+                    'taskevery': taskevery,
+                    'tasktimes': tasktimes,
+                    'taskcommand': taskcommand,
+                    'taskhost':taskhost,
+                    'tasknodes':tasknodes,
+                    'curl_domain': curl_domain,
+                    'curl_port': curl_port,
+                    'curl_ip': curl_ip,
+                    'tcp_port': tcp_port,
+                    'digtype':digtype,
+                    'digdns':digdns,
+                    'msg_type':'server_result_message',
+                    'msg_times':1,              
+                };
+            return postdata
+        }
+        else{return null;}
+
+    }
+
+    function set_task_validate_rule()
+    {
+        $("#taskconfigform").validate({
+            rules: 
+            {
+                'taskstarttime': {required: true,validDate:true },
+                'taskevery':{required: true, number:true },
+                'taskperiod':{required:true},
+                'tasktimes':{required:true},
+                'taskcommand':{required:true},
+                'curldomain':{required:true,ip_host:true},
+                'curlport':{required:true,number:true},
+                'curlip':{required:true,ip_host:true},
+                'digtype':{required:true},
+                'digdns':{required:true,ip_host:true},
+                'taskhost':{required:true},
+                'tasktcpport':{required:true, number:true},
+                'tasknodes':{ required:true,needsSelection:true}
+            }
+
+        });
+        jQuery.validator.addMethod("needsSelection", function(value, element) {
+            var count = $(element).find('option:selected').length;
+            console.log(count);
+            return count > 0;
+        },"please select the node.");
+
+        jQuery.validator.addMethod("validDate", function(value, element) {
+            return this.optional(element) || moment(value,"YYYY/MM/DD hh:mm").isValid();
+        }, "Please enter a valid date in the format YYYY/MM/DD hh:mm");  
+
+        jQuery.validator.addMethod("cus_url", function(value, element){ 
+           
+            re = /^(https?|s?ftp):\/\/(((([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:)*@)?(((\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.(\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.(\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.(\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5]))|((([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.)+(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.?)(:\d*)?)(\/((([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:|@)+(\/(([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:|@)*)*)?)?(\?((([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:|@)|[\uE000-\uF8FF]|\/|\?)*)?(#((([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(%[\da-f]{2})|[!\$&'\(\)\*\+,;=]|:|@)|\/|\?)*)?$/i;
+            return re.test(value);
+        }, "Not valid url.");
+
+        jQuery.validator.addMethod("ip_host", function(value, element) {
+            if (value.length === 0 || value.length > 511)
+            {   
+                return false;
+            }
+            var regExpIp = new RegExp("^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
+            var regResultIp = regExpIp.exec(value);
+            var regExpHostname = new RegExp(/^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$/); // RFC 1123
+            var regResultHostname = regExpHostname.exec(value);
+            if (regResultIp === null && regResultHostname === null){ 
+                return false;
+            }
+            return true;
+        },"Please enter a valid ip or host")
+    }
+
+</script>
+<form id='taskconfigform'>
+    <input type="hidden" id="taskid" value='{{ task_id }}' />
+    <div class="form-group">
+        <label for="taskstarttime" class="col-form-label">Start Time</label>
+        <div class="input-group date" id="tasktime" data-target-input="nearest">
+            <input type="text" class="form-control datetimepicker-input" id='taskstarttime' name="taskstarttime" data-target="#tasktime">
+            <div class="input-group-append" data-target="#tasktime" data-toggle="datetimepicker">&nbsp;
+                <div class="input-group-text"><i class="fa fa-calendar"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <div class="input-group">
+        <label for="taskevery" class="col-form-label">Every : </label>
+        <input type="text" class="form-control" id ="taskevery" name="taskevery">&nbsp;
+        <label for="taskperiod" class="col-form-label">Period : </label>
+                <select id = "taskperiod" class="form-control" name="taskperiod">
+                    <option value="">---Period---</option>
+                    <option value="Days">Days</option>
+                    <option value="Hours">Hours</option>
+                    <option value="Minutes">Minutes</option>
+                    <option value="Seconds">Seconds</option>
+                    <option value="Microseconds">Microseconds</option>
+                </select>
+        <label for="tasktimes" class="col-form-label">Times : </label>
+               <select id = "tasktimes" class="form-control" title="times" name="tasktimes">
+                    <option value="">---Times---</option>
+                    <option value="3">3</option>
+                    <option value="6">6</option>
+                    <option value="9">9</option>
+                </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="taskcommand" class="col-form-label">Command:</label>
+        <select id = "taskcommand" class="form-control"  title="指令" name="taskcommand">
+            <option value="">---command---</option>
+            <option value="curl">curl</option>
+            <option value="dig">dig</option>
+            <option value="ping">ping</option>
+            <option value="tcping">tcping</option>
+            <option value="har">har</option>
+        </select>
+        <div id="curlpart" class="tag" style="display:none">
+            <div class ="input-group-text"> 
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="curlheader" value="curlheader">
+                            <label class="form-check-label" for="curlheader">-I</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="curlivk" value="curlivk">
+                            <label class="form-check-label" for="curlivk">-ivk</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input tagck" type="checkbox" id="curlck" value="curlck">
+                            <label class="form-check-label" for="curlivk">--resolve</label>
+                        </div>
+            </div>
+            <div class="input-group-text" id="curlckpart">
+                <input type="text" class="form-control curltext" placeholder="domain"  id='curldomain' name='curldomain'>
+                <input type="text" class="form-control curltext w-25" placeholder="port"  id='curlport' name='curlport'>
+                <input type="text" class="form-control curltext" placeholder="ip" id='curlip' name='curlip'>
+            </div>
+        </div>
+        <div class="input-group-text tag" id="digpart" style="display:none">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input tagck" type="checkbox" id="digck" value="digck">
+                <label class="form-check-label" for="digck">type/server</label>
+            </div>
+            <div id='digckpart' class='input-group'>
+                <select id="digtype" class="form-control" title="type" name="digtype">
+                    <option value="">---type---</option>
+                    <option value="a">a</option>
+                    <option value="any">any</option>
+                    <option value="ns">ns</option>
+                </select>
+                <input type="text" class="form-control w-50" placeholder="dns server" id="digdns" name="digdns">
+            </div>
+    </div>
+    
+
+    <div class="form-group">
+        <label for="lghost" class="col-form-label">Host:(IP or Domain)</label>
+        <div class="input-group">
+            <input type="text" class="form-control w-50" placeholder="type a web host:http://www.google.com" id ="taskhost" name="taskhost">&nbsp;
+            <div class='tag' id ='tcpingpart' style="display:none"><input type="text" class="form-control" placeholder="port" id="tasktcpport" name='tasktcpport' disabled></div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="tasknodes" class="col-form-label">Nodes:</label>
+        <select id = "tasknodes" multiple="multiple" class="form-control" name="tasknodes" aria-required="true" >
+                {% for region in region_list %}
+                <optgroup label="{{ region }}({{ monitor_list|instance_region_in_count:region }})">
+                    {% for monitor in monitor_list|instance_in_region:region  %}
+                        <option id='monitor-{{ monitor.id }}' value="{{ monitor.id }}">{{ monitor.ch_name }}</option>
+                    {% endfor %} 
+                </optgroup>
+                {% endfor %}
+        </select>   
+    </div>
+    <div class="form-group text-right">
+       <button  type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id = "task_commit">Commit</button>
+    </div>
+        <div class="form-group text-center">
+            <p id ='tasksaveinfo'></p>
+        </div>
+
+</form>

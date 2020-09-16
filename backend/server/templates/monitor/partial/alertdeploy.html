@@ -1,0 +1,209 @@
+<script type="text/javascript">
+        var hid = "{{ hid }}";
+        var saveloadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">please wait...</span></div>';
+
+        $(document).ready(function () {        
+            set_validate_rule();
+            $('.alertcheckbox').change(function() {
+                var id = $(this).attr('id');
+                if($(this).is(":checked")) {                    
+                    $("#"+id+"-body").find("input,select,textarea,button").prop("disabled",false);
+                }
+                else{
+                    $("#"+id+"-body").find("input,select,textarea,button").prop("disabled",true);
+                }
+            });
+            $('#alert_commit').on("click",function (event) {
+                var data = vertify_alert();
+                console.log(data);
+                if(data){
+                    data['username'] = gusername;
+                    data['token']=gtoken;
+                    data['hid'] = hid
+                    console.log(data);
+                    $("#alertdeployform").find("input,select,textarea,button").prop("disabled",true);
+                    $("#alertsaveinfo").html(saveloadinghtml);
+                    $.post("monitor/alert_deploy/",data,function(res){
+                        $("#alertsaveinfo").html("");
+                        alert(res.message);
+                        $('#configmodal').modal('hide');
+                        $('.modal-backdrop').remove();
+                        getContent();
+                    });
+                }
+            });
+             set_value();
+
+        })
+
+        function set_value(){
+            $("#alertdown-body").find("input,select,textarea,button").prop("disabled",true);
+            $("#alertrtt-body").find("input,select,textarea,button").prop("disabled",true);
+            set_alertdown();
+            set_alertrtt();
+        }
+
+        function set_alertdown(){
+            var itemdata = "{{ leveldown }}";
+            if(itemdata!="None"){
+                var down_alert = parseFloat('{{ leveldown.down_percentage_alert }}')*100;
+                var down_recovery = parseFloat('{{ leveldown.down_percentage_recovery }}')*100;
+                var down_bucket = '{{leveldown.bucket}}';
+                var enabled = ('{{ leveldown.enabled }}').toLowerCase() === 'true';
+                console.log(down_alert+":"+down_recovery+":"+down_bucket);
+                $("#downbucket").val(down_bucket);
+                $("#downalert").val(down_alert);
+                $("#downrecover").val(down_recovery);
+                $("#alertdown").prop('checked',enabled);
+                $("#alertdown-body").find("input,select,textarea,button").prop("disabled",!enabled);
+         
+            }
+            else{
+                $("#alertdown").prop('checked',false);
+                $("#downbucket").val("");
+                $("#downalert").val("");
+                $("#recoveralert").val("");
+                $("#alertdown-body").find("input,select,textarea,button").prop("disabled",true);
+            }
+        }
+
+        function set_alertrtt(){
+            var itemdata = "{{ levelrtt }}";
+            console.log(itemdata);
+            if(itemdata!="None"){
+                var rtt_alert = parseFloat('{{ levelrtt.rtt_percentage_alert }}')*100;
+                var rtt_recovery = parseFloat('{{ levelrtt.rtt_percentage_recovery }}')*100;
+                var rtt_threshold = '{{ levelrtt.rtt_threshold }}';
+                var rtt_bucket = '{{levelrtt.bucket}}';
+                var enabled = ('{{ levelrtt.enabled }}').toLowerCase() === 'true';
+                $("#rttbucket").val(rtt_bucket);
+                $("#rttthreshold").val(rtt_threshold);
+                $("#rttalert").val(rtt_alert);
+                $("#rttrecover").val(rtt_recovery);
+                $("#alertrtt").prop('checked',enabled);
+                $("#alertrtt-body").find("input,select,textarea,button").prop("disabled",!enabled);
+            }
+            else{
+                $("#alertrtt").prop('checked',false);
+                $("#rttbucket").val("");
+                $("#rttalert").val("");
+                $("#rttrecover").val("");
+                $("#alertrtt-body").find("input,select,textarea,button").prop("disabled",true);
+            }
+        }
+
+        function set_validate_rule(){
+            $("#alertdeployform").validate({
+                rules: {
+                    downalert: {required: true },
+                    downrecover: {required: true },
+                    rttalert:{required: true },
+                    rttrecover:{required:true}
+                }});
+            jQuery.validator.addClassRules("number",{
+                required: true,
+                number: true
+            });
+         }
+
+        function vertify_alert(){
+            var post_data = {};
+            post_data["alertdown"] = 0;
+            post_data["alertrtt"] = 0;
+            if($("#alertdeployform").valid())
+            {
+                if($('#alertdown').is(':checked'))
+                {
+                    post_data["alertdown"] = 1
+                    post_data["downbucket"] =  $("#downbucket").val();
+                    post_data["downalert"] = $("#downalert").val();
+                    post_data["downrecover"] =$("#downrecover").val();
+                }
+                if($('#alertrtt').is(':checked'))
+                {
+                    post_data["alertrtt"] = 1
+                    post_data["rttbucket"] =  $("#rttbucket").val();
+                    post_data["rttalert"] = $("#rttalert").val();
+                    post_data["rttrecover"] =$("#rttrecover").val();
+                    post_data["rttthreshold"] =$("#rttthreshold").val();
+                }
+                return post_data
+            }
+            else{
+                return null
+            }
+        }
+
+</script>
+
+</script>
+<form id='alertdeployform'>
+    <div class="card">
+        <div class="card-header">
+            <h6><input type="checkbox"  class='alertcheckbox' id="alertdown">Status Down</h6>
+        </div>
+       	<div id ='alertdown-body' class="card-body">   
+            <div class="form-group">
+                <label for="downbucket">bucket:</label>
+                <input type="text" class="form-control number" id="downbucket" placeholder="The count of checking data" name="downbucket">
+            </div>           
+            <div class="form-group">
+                <label for="downalert">alert percentage(>):</label>
+                    <select id = "downalert" class="form-control" name="downalert">
+                        <option value="">---alert rate---</option>
+                        {% for value in statusalertvalues %}
+                            <option value="{{ value }}">{{ value }}</option>
+                        {% endfor %} 
+                    </select>
+            </div>  
+            <div class="form-group">
+                <label for="downrecover">recovery percentage(<):</label>
+                        <select id = "downrecover" class="form-control" name="downrecover">
+                            <option value="">---recovery rate---</option>
+                            {% for value in statusrecovervalues %}
+                                <option value="{{ value }}">{{ value }}</option>
+                            {% endfor %} 
+                        </select>
+            </div>
+    </div>
+    <div class="card">
+            <div class="card-header">
+                <h6><input type="checkbox"  class='alertcheckbox' id="alertrtt"> RTT</h6>
+            </div>
+            <div id ='alertrtt-body' class="card-body">   
+                <div class="form-group">
+                    <label for="rttbucket">bucket:</label>
+                    <input type="text" class="form-control number" id="rttbucket" placeholder="The count of checking data" name="rttcount">
+                </div>   
+                <div class="form-group">
+                    <label for="rttthreshold">threshold:</label>
+                    <input type="text" class="form-control number" id="rttthreshold" placeholder="The Max of rtt" name="rtt">
+                </div>             
+                <div class="form-group">
+                    <label for="rttalert">alert percentage(>):</label>
+                        <select id = "rttalert" class="form-control number" name="rttalert">
+                            <option value="">---alert rate---</option>
+                            {% for value in statusalertvalues %}
+                                <option value="{{ value }}">{{ value }}</option>
+                            {% endfor %} 
+                        </select>
+                </div>  
+                <div class="form-group">
+                    <label for="rttrecover">recovery percentage(<):</label>
+                            <select id = "rttrecover" class="form-control" name="rttrecover">
+                                <option value="">---recovery rate---</option>
+                                {% for value in statusrecovervalues %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %} 
+                            </select>
+                </div>
+    </div>
+    <div class="form-group text-center">
+       <button  type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id = "alert_commit">Commit</button>
+    </div>
+        <div class="form-group text-center">
+            <p id ='alertsaveinfo'></p>
+        </div>
+         
+</form>

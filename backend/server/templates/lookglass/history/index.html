@@ -1,0 +1,142 @@
+{% load lookglass_extras %}
+
+<script type="text/javascript">
+        var id = "{{ user_id }}";
+        var loadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div>';
+
+        $(document).ready(function () {
+           $('#htcommand').multiselect({
+                buttonWidth: '300px',
+                maxHeight: 500,
+           })
+           $('#htnodes').multiselect({
+                enableClickableOptGroups: true,
+                enableCollapsibleOptGroups: true,
+                enableFiltering: true,
+                includeSelectAllOption: true,
+                buttonWidth: '300px',
+                maxHeight: 500,
+                buttonText: function(options, select) 
+                {
+                    if (options.length === 0) {return '---監控點---';}
+                    else if (options.length > 3){return '己選擇'+options.length+'個監控點!';}
+                    else 
+                    {
+                        var labels = [];
+                        options.each(function() 
+                        {
+                            if ($(this).attr('label') !== undefined) {labels.push($(this).attr('label'));}
+                            else {labels.push($(this).html());}
+                        });
+                        return labels.join(', ') + '';
+                    }
+                }
+           });
+           historysearch();
+        })
+        
+        function historysearch()
+        {
+           $("#history_status").html(loadinghtml);
+           var htcommand = $("#htcommand option:selected").val()
+           var htnodes =$("#htnodes :selected").map(function(i, el) {
+                 return $(el).val();
+            }).get().join(",");    
+           var id = 0       
+           var detail_url = "lookglass/lg_history_detail"
+           var data = {'id':id,'command':htcommand,'nodes':htnodes,'token':gtoken,'username':gusername};
+           console.log(data)
+            $.get(detail_url, data , function(res) {
+                $("#history_status").html("");
+                $("#history_content").html(res);
+            }); 
+        }
+       
+</script>
+<style type="text/css">
+.search-sec{
+    padding: 1rem;
+}
+.search-slt{
+    display: block;
+    width: 100%;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #55595c;
+    background-color: #fff;
+    background-image: none;
+    border: 1px solid #ccc;
+    height: calc(3rem + 2px) !important;
+    border-radius:0;
+}
+button.multiselect {
+        height: calc(3rem + 2px) !important;
+        font-size: 0.875rem;
+}
+.wrn-btn{
+    width: 50%;
+    font-size: 16px;
+    font-weight: 400;
+    text-transform: capitalize;
+    height: calc(3rem + 2px) !important;
+    border-radius:0;
+}
+@media (min-width: 992px){
+    .search-sec{
+        position: relative;
+        background: rgba(26, 70, 104, 0.51);
+    }
+}
+
+@media (max-width: 992px){
+    .search-sec{
+        background: #1A4668;
+    }
+}
+</style>
+<section class="search-sec">
+    <div class="container">
+        <form action="#" method="post" novalidate="novalidate">
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="row">
+                        <div class="col-lg-3 col-md-3 col-sm-12 p-0">
+                            <select id = "htcommand" class="form-control search-slt" title="指令">
+                                <option value="" selected>All</option>
+                                <option value="curl">curl</option>
+                                <option value="websocket">ws</option>
+                                <option value="dig">dig</option>
+                                <option value="ping">ping</option>
+                                <option value="tcping">tcping</option>
+                                <option value="har">har</option>
+                            </select>                                   
+                        </div>
+                        <div class="col-lg-3 col-md-3 col-sm-12 p-0">
+                            <select id = "htnodes" multiple class="form-control search-slt">
+                                {% for region in regionlist %}
+                                    <optgroup label="{{ region.ch_name }}-{{ region.en_name }}({{ monitorlist|region_in_count:region.ch_name }})" class="group-"+region.id>
+                                        {% for monitor in monitorlist|monitor_in_region:region.ch_name  %}
+                                            <option id='{{ region.ch_name }}-{{ region.id }}-{{ monitor.ch_name }}-{{ monitor.id }}' value="{{ monitor.id }}">{{ monitor.ch_name }}</option>
+                                        {% endfor %} 
+                                    </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-3 col-sm-12 p-0">
+                            <button type="button" onclick="historysearch()"  class="btn btn-danger wrn-btn"><li class="fa fa-search"></li></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+<div id='history_status' class="d-flex justify-content-center">
+
+</div>
+
+<div id ="history_content" class='row'> 
+
+</div>
+      

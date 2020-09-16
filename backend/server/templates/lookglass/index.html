@@ -1,0 +1,414 @@
+{% load lookglass_extras %}
+
+<script type="text/javascript">
+        var loadinghtml = '<div class="spinner-border m-5" role="status"><span class="sr-only">Loading...</span></div>';
+        $(function() {
+           $('#lgpoint').selectpicker();
+           $('#lgcommand').selectpicker();
+           $('#nslookuptype').selectpicker();
+
+             // command change event
+           $('#lgcommand').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue) {
+                $(".tag").hide();
+                $("#curlhead").hide();
+                $("#wsorigin").hide();
+                var command = $("#lgcommand :selected" ).text();
+                if(command == 'dig' || command=='nslookup'){$("#dnstag").show();}
+                else if(command=='ws'){$("#curltag").show();}
+                else{$("#"+command+"tag").show();}
+                if(command == 'curl' || command == 'ws'){
+                    $("#curlhead").show();
+                    if (command == 'ws'){
+                        $("#wsorigin").show();
+                    }
+                }
+                changeplaceholder(command);
+
+           })
+            
+           // command checkbox event
+           $('.tagck').change(function() {
+                var command = $('#lgcommand option:selected').text();
+                var tagname = command;
+                if(command =='ws'){tagname ='curl';}
+                $("."+tagname+"text").prop('disabled', true);
+                $("#nslookuptype").prop('disabled', true);
+                $("#nslookuptype").selectpicker('refresh');
+                if($(this).is(":checked")) {                    
+                    $("."+tagname+"text").attr('disabled', false);
+                    if(tagname == 'nslookup'|| command == 'dig')
+                    {
+                        $(".nslookuptext").attr('disabled', false);
+                        $("#nslookuptype").prop('disabled', false);
+                        $("#nslookuptype").selectpicker('refresh');
+                    }
+                }
+            });
+
+            //look glass event
+           $('#looking_glass').on("click",function (event) {
+                var data = getlgvalues();
+                if(data["lg_name"] =="" || data["lg_command"]=="" || data["lg_host"] ==""){
+                    alert('please select choose the right site and input the right host');
+                }
+                else
+                {
+                    if(data["lg_command"] == 'curl' || data["lg_command"] == 'har' )
+                    {
+                        if(!isUrl(data['lg_host']))
+                        {
+                            alert("please input the right format for http or https host");
+                        }
+                        else{
+                            initialStatus(data);
+                            lookingglass(data); 
+                       } 
+                    }   
+                    else{
+                        initialStatus(data);
+                        lookingglass(data); 
+                    } 
+                    
+                }
+            })
+
+            $("#readme").click(function(){
+                var readmehtml = $("#readmecontent").html();
+                var notify= notifyMsg(readmehtml);
+            });
+        })
+        function changeplaceholder(command)
+        {           
+            if(command == 'nslookup' || command=='dig'){
+                $("#lghost").attr("placeholder", "Type a dns: www.google.com");
+
+            }
+            else  if(command == 'mtr' || command == 'tcping' || command =='ping'){
+                $("#lghost").attr("placeholder", "Type a dns or ip: www.google.com or 8.8.8.8");
+
+            }
+            else  if(command == 'curl' || command == 'har' ){
+                $("#lghost").attr("placeholder", "type a web host:http://www.google.com");
+
+            }
+        }
+
+        function getlgvalues()
+        {
+            var lg_host = $('#lghost').val();
+            var lg_origin= $('#wsorigin').val();
+            var lg_name = $('#lgpoint option:selected').text();
+            var lg_id =$('#lgpoint option:selected').val();
+            var command = $('#lgcommand option:selected').val();
+            var curl_domain ="";
+            var curl_ip ="";
+            var curl_port ="";
+            var tcp_port = $('#tcpport').val();
+            var nslookup_type  ="";
+            var nslookup_dns  ="";
+
+            if(command == 'curl' || command == 'websocket') {    
+                if ($('#curlivk').is(":checked")){
+                    lg_host = ' -ivk '+ lg_host;
+                }
+                if($('#curlheader').is(":checked")){
+                    lg_host = ' -I '+ lg_host;
+               }
+            }
+            if($('#curlck').is(":checked")){
+                curl_domain = $('#curldomain').val();
+                curl_ip = $('#curlip').val();
+                curl_port = $('#curlport').val();
+            }
+            if($('#nslookupck').is(":checked")){
+                nslookup_type = $('#nslookuptype option:selected').val();
+                nslookup_dns = $('#nslookupdns').val();
+            }
+                            
+            var  dict = {
+                    'lg_name': lg_name,
+                    'lg_id': lg_id,
+                    'lg_command': command,
+                    'lg_host': lg_host.trim(),
+                    'lg_origin':lg_origin,
+                    'curl_domain': curl_domain,
+                    'curl_port': curl_port,
+                    'curl_ip': curl_ip,
+                    'tcp_port': tcp_port,
+                    'nslookup_type':nslookup_type,
+                    'nslookup_dns':nslookup_dns,
+                    'token':gtoken,
+                    'username':gusername
+                };
+                console.log(dict)
+                return dict
+
+        }
+        //initial show result table
+        function initialStatus(data){
+                var lg_host = $('#lghost').val();
+                $('#testing_table').unbind().removeData();
+                $("#testing_table > tbody").html("");
+                $("#testing_table tbody").append("<tr><td>"+data["lg_name"] +"</td><td>"+data["lg_command"] +"</td><td>"+lg_host+"</td><td  colspan='3' id='downlink'></td></tr>");
+                //$("#testing_table tbody").append("<tr><th>result</th><td colspan='5' id='showresult'></td></tr>");
+
+        } 
+
+        function lookingglass(data){
+            $("#showresult").html(loadinghtml);
+            $.getJSON( "lookglass/looking_glass",data, function(res) {
+                //console.log(res);
+                $("#showresult").empty();
+                    if(data["lg_command"] == 'har'){
+                        show_har(data["lg_id"],res);
+                    }
+                    else if(data["lg_command"] == 'mtr'){
+                        show_mtr(res.result);
+                    }
+                    else if(data["lg_command"] == 'curl'|| data["lg_command"] == 'websocket'){
+                     
+                        $("#showresult").append("<span><b style='color:blue'>"+res.total_time+"</b></span><br/>");
+ 
+                        $("#showresult").append("<textarea rows='15' cols='120' readonly>"+res.result.replace("\n","<br/>")+"</textarea>");
+                    }
+                    else{
+                        $("#showresult").append(res.result);
+
+                    } 
+            });  
+          } 
+          
+        function show_mtr(result){
+            var result_html = '<table class="table table-responsive testing_table"><thead><tr><th>&nbsp;</th><th>Hostname</th><th>Loss</th><th>Received</th><th>Sent</th><th>Min</th><th>Avg</th><th>Max</th></tr></thead><tbody>';
+            for (var i = 0; i < result.length; i++) { 
+                result_html = result_html +  '<tr><td>'+result[i].replace(/ /g,"</td><td>").replace("\n","</td>")+'</tr>';
+            }
+            result_html = result_html+ '</tbody>'; 
+            $("#showresult").html(result_html);
+          }
+
+        function show_har(lg_id,res)
+        {
+             $("#showresult").append(outputhtml());
+             var pageSelectorEl = document.getElementById("page-selector");
+             var legendHolderEl = document.getElementById("legend-holder");
+             var perfCascadeOptions = {
+                    showAlignmentHelpers: true, //default: true
+                    showIndicatorIcons: true, //default: true
+                    selectedPage: 1,
+                    pageSelector: pageSelectorEl, //default: undefined
+                    legendHolder: legendHolderEl, //default: undefined (hide-legend)
+                    showUserTiming: true, //default: false
+                    showUserTimingEndMarker:true
+             }
+             var download_url = "/lookglass/lg_down?lg_id="+lg_id +"&url="+ res.url;
+             $("#downlink").html('<button type="button" class="btn">'+
+                '<a href="'+ download_url +'" target="_blank"><span class="fa fa-download"></span></button>');
+             var perfCascadeSvg = perfCascade.fromHar(res.result, perfCascadeOptions);
+             $("#haroutput").append(perfCascadeSvg);     
+             var totalsize = (parseInt(res.total_size) / (1024*1024)).toFixed(2)
+             var totalloadtime = (parseInt(res.load_time) / 1000).toFixed(2)
+             $("#hartotal").append('<span class="label label-info" style="color:blue">request:'+res.requests+',total size:'+totalsize+' MB,total loading:'+totalloadtime+'s</span>');
+
+          }
+        
+        function outputhtml()
+        {
+              return '<div id="hartotal"></div>'+
+              '<div id="legend-holder"></div>'+
+              '<select id="page-selector"  class="page-selector"></select>'+
+              '<div id="haroutput"></div>';
+        }
+
+        function isUrl(s) {
+            var regexp = /(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/
+            return regexp.test(s);
+        }
+
+        function notifyMsg(msg){
+       var notify =  $.notify({
+            // options
+            icon: 'glyphicon glyphicon-info-sign',
+            title: '提示',
+            message: msg,
+            target: '_blank'
+        },{
+            // settings
+            element: 'body',
+            position: null,
+            type: "info",
+            allow_dismiss: true,
+            newest_on_top: true,
+            showProgressbar: false,
+            placement: {
+                from: "top",
+                align: "right"
+            },
+            offset: 20,
+            spacing: 10,
+            z_index: 1031,
+            delay:60000,
+            url_target: '_blank'
+        });
+
+       return notify;
+    }
+          
+</script>
+<style>
+ .table-fixed thead {
+  width: 97%;
+}
+.table-fixed tbody {
+  height: 350px;
+  overflow-y: auto;
+  width: 100%;
+}
+.table-fixed thead, .table-fixed tbody, .table-fixed tr, .table-fixed td, .table-fixed th {
+  display: block;
+}
+.table-fixed tbody td, .table-fixed thead > tr> th {
+  float: left; 
+  border-bottom-width: 0;
+}   
+.special {
+  font-weight: bold !important;
+  color:blue !important;
+}
+
+</style>
+<div class='row'>
+        <div class="input-group mb-3">
+            <div class="input-group-prepend">
+                <select id = "lgpoint" class="selectpicker" data-live-search="true"  title="監控點">
+                        {% for region in regionlist %}
+                        <optgroup label="{{region.ch_name}}-{{ region.en_name }}({{ monitorlist|region_in_count:region.ch_name }})">
+                            {% for monitor in monitorlist|monitor_in_region:region.ch_name  %}
+                                    <option value="{{ monitor.id }}"  >{{ monitor.ch_name }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                </select>   
+                <select id = "lgcommand" class="selectpicker" title="指令" data-width="40%">
+                        <option value="curl">curl</option>
+                        <option value="tcping">tcping</option>
+                        <option value="ping">ping</option>
+                        <option value="nslookup">nslookup</option>
+                        <option value="dig">dig</option>
+                        <option value="mtr">mtr</option>
+                        <option value="har">har</option>
+                        <option value="websocket">ws</option>
+                </select>
+                
+                <div class='input-group-text' id="curlhead" style="display:none">
+                        <input type="checkbox" id='curlheader' aria-label="Checkbox  for following text input">
+                        <label class="form-check-label" for="curlheader">&nbsp;-I</label>&nbsp;
+                        <input type="checkbox" id='curlivk' aria-label="Checkbox  for following text input">
+                        <label class="form-check-label" for="curlivk">&nbsp;-ivk</label>
+                </div>
+            </div>
+            
+            &nbsp;<a href="#" data-toggle="tooltip" title="點我提示" id ='readme'><span class="fas fa-info-circle"></span></a>&nbsp;
+            <input type="text" class="form-control" placeholder="type a web host:http://www.google.com" id ="lghost">&nbsp;
+            <input type="text" class="form-control" placeholder="origin" id="wsorigin"" style="display:none">
+
+       
+            <div class='tag' id="tcpingtag" style="display:none" class="col-sm-1">
+                    <div class="input-group">
+                        <input type="text" class="form-control" placeholder="port" id="tcpport">
+                    </div>
+            </div>
+            <button type="button" id = "looking_glass" class="btn btn-outline-info">run</button>
+        </div>
+</div>
+
+<div class='tag' id="dnstag" style="display:none">
+    <div class="col-md-6">
+
+        <div class="input-group">
+          <div class="input-group-prepend">
+            <div class="input-group-text">
+                <input type="checkbox" id='nslookupck' class='tagck' aria-label="Checkbox  for following text input">
+                <label class="form-check-label" for="nslookupck">&nbsp;type/server</label>
+            </div>
+          </div>
+          <select aria-label="Text input with checkbox" id = "nslookuptype" class="selectpicker nslookuptext" title="type" data-width="20%" disabled>
+                <option value="a">a</option>
+                <option value="any">any</option>
+                <option value="ns">ns</option>
+
+         </select>
+        <input type="text" class="form-control nslookuptext" placeholder="dns server"  id="nslookupdns" aria-label="Text input with checkbox" disabled>
+        </div>
+    </div>
+ </div>
+
+<div class='row tag' id="curltag" style="display:none">
+ <div class="col-md-8">
+    <div class="input-group">
+            <div class="input-group-prepend">
+              <div class="input-group-text">
+                <input type="checkbox" id='curlck' class='tagck' aria-label="Checkbox  for following text input">
+                <label class="form-check-label" for="curlck">&nbsp;--resolve</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+                <input type="text" class="form-control curltext" placeholder="domain"  id='curldomain'  aria-label="Text input with checkbox" disabled>
+            </div>
+            <div class="col-md-2">
+                <input type="text" class="form-control curltext" placeholder="port"  id='curlport'  aria-label="Text input with checkbox" disabled>
+            </div>
+            <div class="col-md-3">
+                <input type="text" class="form-control curltext " placeholder="ip" id='curlip'  aria-label="Text input with checkbox" disabled>
+            </div>
+
+    </div>
+</div>
+</div>
+
+<div id ="testing_content" class="row">
+ <div class="table-responsive">
+	<table id = "testing_table" class="table table-bordered table-striped">
+	<thead><tr><th>監控點</th><th>指令</th><th>host</th><th colspan="3"></th></tr></thead>
+	<tbody>
+
+    </tbody>
+    </table>
+ </div>
+</div>
+
+<div class='row' id='readmecontent' style="display:none">
+<table class="table table-fixed table-borderless">
+    <tbody>  
+         <tr>
+             <td><h5><span class="badge badge-light">curl</span></h5></td>
+             <td>
+                <p>-I &nbsp; Show document info only(仅显示响应文档头)</p>
+                <p>-L &nbsp; Show document info only(跟踪重定向 (H))</p>
+                <p>-i &nbsp; Include protocol headers in the output (H/F)(在输出中包含协议头 (H/F))</p>
+                <p>-v &nbsp;  Make the operation more talkative(显示详细操作信息)</p>
+                <p>-k &nbsp; Allow connections to SSL sites without certs (H)(允许连接到 SSL 站点，而不使用证书 (H))</p>
+            </td>
+        </tr>
+        <tr>
+                <td><h5><span class="badge badge-light">nslookup/dig</span></h5></td>
+                <td>
+                   <p> nslookup -type=Type domain(網域名稱) NameServer / dig @NameServer domain(網域名稱) Type</p>
+                   <p>Type 參數：</p>
+                   <p>a &nbsp; Specifies a computer's IP address(指定的電腦名稱'IP 位址)</p>
+                   <p>any &nbsp; any and all available data(顯示全部ns資訊)</p>
+                   <p>ns &nbsp; Specifies a DNS name server for the named zone.(指定的具名區域的 DNS 名稱伺服器)</p>
+               </td>
+        </tr>
+
+    </tbody>
+  </table>
+</div>
+
+<section id='showresult' class="main-content">
+    <div id="hartotal"></div>
+    <div id="legend-holder"></div>
+    <select id="page-selector"  class="page-selector"></select>
+    <div id="haroutput"></div>
+</section>
+

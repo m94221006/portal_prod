@@ -1,0 +1,69 @@
+{
+    "jobs": [
+        {
+            "hosturls": "https://www.example1.com/"
+        },
+        {
+            "hosturls": "http://www.example2.com"
+        } 
+    ],
+    "details": [
+        {
+            "key": "ssl.verification_mode",
+            "value": "none"
+        },
+        {
+            "key": "max_redirects",
+            "value": "0"
+        }
+
+    ],
+    "file_name": "letron_http_2.yml",
+    "interval": 300,
+    "enabled": 1,
+    "creator": "ricky",
+    "lastupdatedby": "ricky",
+    "customerinfo": 1,
+    "protocol": 1
+}
+
+{
+    "tag": "1,亞太,電信",
+    "enabled": 1,
+    "creator": "ricky",
+    "lastupdatedby": "ricky",
+    "config": 7,
+    "instance": 2,
+    "status": 1
+}
+,
+{
+    "cid": 1,
+    "hb_protocol": 1,
+    "hb_tag": "",
+    "hb_yml_name": "etron_http_2.yml",
+    "schedule": 120,
+    "enabled": true,
+    "created_by": "system",
+    "updated_by": "system",
+    "url_heartbeat": [{ "full_url":"http://www.example1com.tw"},{ "full_url":"ttp://www.example2.com"}],
+    "detail_heartbeat": [{"key":"check.request:testing","value": "status: 200\r\n    body:\r\n      - Saved\r\n      - saved"}]
+}
+{
+    "url_heartbeat": [
+        {
+            "id": 10,
+            "full_url": "http://www.testing1.tw",
+            "enabled": true
+        },
+        {
+            "id": 11,
+            "full_url": "http://www.test2.com",
+            "enabled": false
+        },
+       {
+            "id": 0,
+            "full_url": "http://www.test3.com"
+        }
+    ]
+}

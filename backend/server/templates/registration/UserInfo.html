@@ -1,0 +1,58 @@
+  
+  <script type="text/javascript">
+        $(document).ready(function () {        
+            $('#userlogout').on('click', function() {
+              console.log('user logout');
+              localStorage.removeItem('userinfo');
+              gtoken =null
+              gusername=null
+              $('.modal-backdrop').remove();
+              clearInterval(timer);
+              getContent();
+        });
+  })
+ </script>
+ <li class="nav-item dropdown no-arrow">
+                <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ username }}</span>
+                      <img class="img-profile rounded-circle" src="//ssl.gstatic.com/accounts/ui/avatar_2x.png" width="26" height="23" >
+                  </a>
+                <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in" aria-labelledby="userDropdown">
+                    {% if username %}
+                    <a class="dropdown-item" id='home' href="/index">
+                    <i class="fas fa-home fa-sm fa-fw mr-2 text-gray-400"></i>
+                    Home
+                  </a>
+                  <a class="dropdown-item" id='userguide' href="/overview/download" target="blank">
+                      <i class="fas fa-file-pdf fa-sm fa-fw mr-2 text-gray-400"></i>
+                      User Guide                  
+                  </a>
+                  <a class="dropdown-item" href="#" data-toggle="modal" data-target="#logoutModal">
+                      <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
+                    Log out
+                  </a>
+                    {% endif %}
+               </div>
+              </ul>
+            </nav>
+</li>
+
+
+<div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="exampleModalLabel">Ready to Leave?</h5>
+              <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <div class="modal-body">Select "Logout" below if you are ready to end your current session.</div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+              <a class="btn btn-primary" id='userlogout' data-dismiss="modal" href="#">Logout</a>
+            </div>
+          </div>
+        </div>
+    </div>  
+  </div>

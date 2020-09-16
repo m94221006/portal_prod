@@ -1,0 +1,114 @@
+
+<script type="text/javascript">
+        $(document).ready(function () {    
+           var monitor_list = '{{ monitor_list }}';
+           var loadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div>';
+
+           console.log(monitor_list);
+    
+           var table = $('#minstance_table').DataTable({
+                responsive: true,
+                "oLanguage": {
+                "sLengthMenu": "每頁顯示 _MENU_ 條",
+                "sProcessing": "<img src='" + loadinghtml + "'/><span>&nbsp;&nbsp;Loading...</span>",
+                "sInfo": "從 _START_ 到 _END_, 共 _TOTAL_ 條記錄",
+                "sInfoEmpty": "",
+                "sGroupActions": "_TOTAL_ records selected:  ",
+                "sAjaxRequestGeneralError": "未能連線伺服器，請重試！",
+                "sEmptyTable": "未找到相關記錄",
+                "sZeroRecords": "共 0 條記錄",
+                "sInfoFiltered": "(從 _MAX_ 條資料中檢索)",
+                "oPaginate": {
+                    "sPrevious": "上一頁",
+                    "sNext": "下一頁",
+                    "sPage": "頁",
+                    "sPageOf": "of"
+                },
+                "sSearch": "搜尋",
+            },
+            "bFilter": true, //搜尋欄
+            "initComplete": function () { 
+                this.api().columns().every( function () {
+                    var column = this;
+                    var select = $('<select><option value=""></option></select>')
+                        .appendTo( $(column.header()) )
+                        .on( 'change', function () {
+                            var val = $.fn.dataTable.util.escapeRegex(
+                                $(this).val()
+                            );
+                            column
+                                .search( val ? '^'+val+'$' : '', true, false )
+                                .draw();
+                        } );
+    
+                    column.data().unique().sort().each( function ( d, j ) {
+                        select.append( '<option value="'+d+'">'+d+'</option>' )
+                    } );
+                } );
+                         
+            },
+             order: [[ 1, 'asc' ]]
+            });     
+            $('#instanceconfig').on('click', function() {
+                var monitor_list = '{{ monitor_list }}';
+                var geturl = "monitor/instance_config";
+                var data = {'username':gusername,'token':gtoken,'monitor_list':monitor_list};
+                console.log(data);
+                $.get(geturl, data , function(res) {
+                    $('#instanceconfigbody').html(res);
+                    $('#instancemodal').modal('show');
+                });
+            });
+    })
+</script>
+<style type="text/css">
+</style>
+
+<div class="container-fluid">
+   <div class="toolbar">
+        <button class="btn btn-secondary" id='instanceconfig'><li class="fa fa-edit"></li> </button>
+    </div>
+    <div id ="instance_content" class="table-responsive">
+        <table id = 'minstance_table' class="table table-bordered" width="100%" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Region</th>
+                    <th>ISP</th>
+                    <th>Name</th>
+                    <th>Status</th>
+                </tr>
+           </thead>  
+            <tboby>
+            {% for instance in instance_list  %}
+                    <tr>
+                        <td>{{ instance.region_name }}</td>
+                        <td>{{ instance.isp_name }}</td>
+                        <td>{{ instance.ch_name }}</td>
+                        <td>
+                            {% if instance.id in monitor_id_list %}
+                                {{ instance.status_name }} <span class='text-info'>(In-Used)</span>
+                            {% else %}
+                                {{ instance.status_name }}
+                            {% endif %}
+                        </td>
+
+                    </tr>
+            {% endfor %} 
+            </tboby>  
+        </table>
+
+    </div> 
+</div>
+
+<div id="instancemodal" class="modal fade" tabindex="-1" role="dialog">
+    <div class="modal-dialog  modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="exampleModalLabel">node configurations</h5>
+              <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <div class="modal-body" id="instanceconfigbody"> 
+            </div>
+</div>

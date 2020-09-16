@@ -1,0 +1,444 @@
+
+<script type="text/javascript">
+        var saveloadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">please wait...</span></div>';
+        var alertvalid =null;
+        $(document).ready(function () {        
+            set_validate_rule();
+            
+            var alertstatus = parseInt("{{ alertstatus }}");
+            if(alertstatus == 1 )
+            {
+                $("input[type=radio][name='toggle_option'][value='enable']").prop("checked", true);
+                $("#alertform").find(".alertcheckbox").prop("disabled",false);
+                $("#notify-body").find("input,select,textarea,button").prop("disabled",false);
+
+            }
+            else
+            {
+                $("input[type=radio][name='toggle_option'][value='disable']").prop("checked", true);
+                $("#alertform").find(".alertcheckbox").prop("disabled",true);
+                $("#notify-body").find("input,select,textarea,button").prop("disabled",true);
+            }
+
+            setvalue();
+
+            $('input[type=radio][name=toggle_option]').change(function() {
+                if (this.value == 'enable') {
+                    $("#alertform").find(".alertcheckbox").prop("disabled",false);
+                    $("#notify-body").find("input,select,textarea,button").prop("disabled",false);
+
+                }
+                else if (this.value == 'disable') {
+                    $("#alertform").find(".alertcheckbox").prop("disabled",true);
+                    $("#notify-body").find("input,select,textarea,button").prop("disabled",true);
+                }
+            });
+
+            $('.alertcheckbox').change(function() {
+                var id = $(this).attr('id');
+                if($(this).is(":checked")) {                    
+                    $("#"+id+"-body").find("input,select,textarea,button").prop("disabled",false);
+                }
+                else{
+                    $("#"+id+"-body").find("input,select,textarea,button").prop("disabled",true);
+                }
+            });
+
+            $('#gobalalert_commit').on("click",function (event) {
+                var data = vertify_alert();
+                console.log(data);
+                if(data){
+                   data['username'] = gusername;
+                    data['token']=gtoken;
+                    console.log(data);
+                    $("#alertform").find("input,select,textarea,button").prop("disabled",true);
+                    $("#alertsaveinfo").html(saveloadinghtml);
+                    $.post("monitor/alert_config/",data,function(res){
+                        alert(res.message);
+                        getContent();
+                    });
+                }
+            });
+
+        })
+
+        function setvalue(){
+            setnotification();
+            setalert40X();
+            setalert50X();
+            setalert20030X();
+        }
+
+        function setnotification(){
+            var itemdata = "{{ customercontact }}";
+            if(itemdata!="None"){
+                var recipient_id = '{{ customercontact.recipient_id }}';
+                $("#recipient_id").val(recipient_id)
+            }
+            else{$("#recipient_id").val("");}
+        }
+
+        function setalert40X(){
+            var itemdata = "{{ level40xerror }}";
+            console.log(itemdata);
+            if(itemdata!="None"){
+                var interval = '{{ level40xerror.interval }}';
+                var total_bucket = '{{ level40xerror.total_bucket }}';
+                var error_bucket = '{{level40xerror.error_bucket}}';
+                var threshold = '{{ level40xerror.threshold }}';
+                var enabled = ('{{ level40xerror.enabled }}').toLowerCase() === 'true';
+                $("#interval40X").val(interval);
+                $("#tb40X").val(total_bucket);
+                $("#eb40X").val(error_bucket);
+                $("#threshold40X").val(threshold);
+                $("#alert40X").prop('checked',enabled);
+                $("#alert40X-body").find("input,select,textarea,button").prop("disabled",!enabled);
+         
+            }
+            else{
+                $("#alert40X").prop('checked',false);
+                $("#interval40X").val("");
+                $("#tb40X").val("");
+                $("#eb40X").val("");
+                $("#threshold40X").val("");
+                $("#alert40X-body").find("input,select,textarea,button").prop("disabled",true);
+            }
+        }
+
+        function setalert50X(){
+            var itemdata = "{{ level50xerror }}";
+            if(itemdata!="None"){
+                var interval = '{{ level50xerror.interval }}';
+                var total_bucket = '{{ level50xerror.total_bucket }}';
+                var error_bucket = '{{level50xerror.error_bucket}}';
+                var threshold = '{{ level50xerror.threshold }}';
+                var enabled = ('{{ level50xerror.enabled }}').toLowerCase() === 'true';
+
+                $("#interval50X").val(interval);
+                $("#tb50X").val(total_bucket);
+                $("#eb50X").val(error_bucket);
+                $("#threshold50X").val(threshold);
+                $("#alert50X").prop('checked',enabled);
+                $("#alert50X-body").find("input,select,textarea,button").prop("disabled",!enabled);
+            }
+            else{
+                $("#alert50X").prop('checked',false);
+                $("#interval50X").val("");
+                $("#tb50X").val("");
+                $("#eb50X").val("");
+                $("#threshold50X").val("");
+                $("#alert50X-body").find("input,select,textarea,button").prop("disabled",true);
+
+            }
+        }
+
+        function setalert20030X(){
+            var itemdata = "{{ level20030xerror }}";
+            if(itemdata!="None"){
+                var interval = '{{ level20030xerror.interval }}';
+                var alerting_time = '{{ level20030xerror.alerting_time }}';
+                var recovery_time = '{{level20030xerror.recovery_time}}';
+                var bucket = '{{level20030xerror.bucket}}';
+                var enabled = ('{{ level20030xerror.enabled }}').toLowerCase() === 'true';
+
+                $("#interval20030X").val(interval);
+                $("#at20030X").val(alerting_time);
+                $("#rt20030X").val(recovery_time);
+                $("#tb20030X").val(bucket);
+                $("#alert20030X").prop('checked', enabled);
+                $("#alert20030X-body").find("input,select,textarea,button").prop("disabled",!enabled);
+
+            }
+            else{
+                $("#alert20030X").prop('checked', false);
+                $("#interval20030X").val("");
+                $("#at20030X").val("");
+                $("#rt20030X").val("");
+                $("#tb20030X").val("");   
+                $("#alert20030X-body").find("input,select,textarea,button").prop("disabled",true);
+
+            }
+        } 
+         
+        function vertify_alert(){
+            var post_data = {};
+            var alertvalue = $("input[name='toggle_option']:checked").val();
+            var recipient_id  = $("#recipient_id").val();
+            post_data["alertvalue"] = alertvalue
+            post_data["alert40X"] =  0
+            post_data["alert50X"] =  0
+            post_data["alert20030X"] =  0
+            console.log($("#alertform").valid())
+            if(alertvalue =='enable')
+            {
+                if($("#alertform").valid())
+                {
+                    post_data["recipient_id"]=recipient_id
+                    if($('#alert40X').is(':checked')){
+                        post_data["alert40X"] = 1
+                        post_data["interval40X"] =  $("#interval40X").val();
+                        post_data["tb40X"] = $("#tb40X").val();
+                        post_data["eb40X"] =$("#eb40X").val();
+                        post_data["threshold40X"] =$("#threshold40X").val();
+                    }
+                    if($('#alert50X').is(':checked')){
+                        post_data["alert50X"] = 1
+                        post_data["interval50X"] =  $("#interval50X").val();
+                        post_data["tb50X"] = $("#tb50X").val();
+                        post_data["eb50X"] =$("#eb50X").val();
+                        post_data["threshold50X"] =$("#threshold50X").val();
+                        
+                    }
+                    if($('#alert20030X').is(':checked')){
+                        post_data["alert20030X"] = 1
+                        post_data["interval20030X"] =  $("#interval20030X").val();
+                        post_data["at20030X"] = $("#at20030X").val();
+                        post_data["rt20030X"] =$("#rt20030X").val();
+                        post_data["tb20030X"] =$("#tb20030X").val();
+                    }
+                    return post_data;
+                }
+                else{ return null;}
+            } 
+            else{return post_data;}  
+        }
+
+        function set_validate_rule(){
+            $("#alertform").validate({   
+                rules:{
+                      'recipient_id':{
+                          required: true,
+                          remote:
+                          {
+                            type: 'post',
+                            url: "monitor/recipient_vertify/", 
+                            data: {recipient_id: function () {return $("#recipient_id").val();}},
+                            dataType: 'json',
+                            dataFilter:function(res,type)
+                            {
+                                var msg = JSON.parse(res);
+                                console.log(msg.status_code);
+                                if (msg.status_code == 200) {return true ;} 
+                                else { return false ;}
+                            }
+                          }
+                      }
+                  },
+                 messages: {
+                        recipient_id:{
+                           remote: "please add letron_alert_bot to your chat group.",
+                        }
+                }
+            });
+            jQuery.validator.addClassRules("interval",{
+                required: true
+            });
+
+            jQuery.validator.addClassRules("alertnumber",{
+                required: true,
+                number: true
+            });
+        }
+</script>
+
+</script>
+<style type="text/css">
+    .raidowrapper{
+    background: #497dd0;
+    padding:10px;
+    }
+
+    .toggle_radio{
+    position: relative;
+    background: rgba(255,255,255,.1);
+    margin: 4px auto;
+    overflow: hidden;
+    padding: 0 !important;
+    -webkit-border-radius: 50px;
+    -moz-border-radius: 50px;
+    border-radius: 50px;
+    position: relative;
+    height: 26px;
+    width: 218px;
+    }
+    .toggle_radio > * {
+    float: left;
+    }
+    .toggle_radio input[type=radio]{
+    display: none;
+    /*position: fixed;*/
+    }
+    .toggle_radio label{
+    font: 90%/1.618 "Source Sans Pro";
+    color: rgba(255,255,255,.9);
+    z-index: 0;
+    display: block;
+    width: 100px;
+    height: 20px;
+    margin: 3px 3px;
+    -webkit-border-radius: 50px;
+    -moz-border-radius: 50px;
+    border-radius: 50px;
+    cursor: pointer;
+    z-index: 1;
+    /*background: rgba(0,0,0,.1);*/
+    text-align: center;
+    /*margin: 0 2px;*/
+    /*background: blue;*/ /*make it blue*/
+    }
+    .toggle_option_slider{
+    /*display: none;*/
+    /*background: red;*/
+    width: 100px;
+    height: 20px;
+    position: absolute;
+    top: 3px;
+    -webkit-border-radius: 50px;
+    -moz-border-radius: 50px;
+    border-radius: 50px;
+    -webkit-transition: all .4s ease;
+    -moz-transition: all .4s ease;
+    -o-transition: all .4s ease;
+    -ms-transition: all .4s ease;
+    transition: all .4s ease;
+    }
+
+    #enablealert:checked ~ .toggle_option_slider{
+    background: rgba(255,255,255,.3);
+    left: 3px;
+    }
+    #disablealert:checked ~ .toggle_option_slider{
+    background: rgba(255,255,255,.3);
+    left: 109px;
+    }
+</style>
+
+<div>
+    <div class="raidowrapper">
+        <div class="toggle_radio">
+            <input type="radio" class="toggle_option" id="enablealert" name="toggle_option" value="enable">
+            <input type="radio" checked class="toggle_option" id="disablealert" name="toggle_option" value="disable">
+            <label for="enablealert"><p>Enable</p></label>
+            <label for="disablealert"><p>Disable</p></label>
+            <div class="toggle_option_slider">
+        </div>
+    </div>
+</div>
+<form id='alertform'>
+    <div class="card">
+            <div class="card-header">
+                <h6>Notification Setting</h6>
+            </div>
+            <div id ='notify-body' class="card-body"> 
+                <div class="row">
+                    <div class="col-sm-6">
+                        <div class="input-group form-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text"><i class="fab fa-telegram"></i></span>
+                            </div>
+                            <input type="text" class="form-control alertnumber" id="recipient_id" placeholder="telegram channel id" name="recipient_id"> &nbsp;
+                        </div>
+                    
+                    </div>
+                </div>   
+            </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h6><input type="checkbox"  class='alertcheckbox' id="alert40X">&nbsp;Status code:40X</h6>
+        </div>
+       	<div id ='alert40X-body' class="card-body"> 
+            <div class="form-group">
+                <label for="tb40X">check interval(minutes):</label>
+                   <select id = "interval40X" class="form-control interval">
+                            <option value="">---checkpoint---</option>
+                            <option value="2">2</option>
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                    </select>
+            </div>     
+            <div class="form-group">
+                <label for="tb40X">total bucket(count):</label>
+                <input type="text" class="form-control alertnumber" id="tb40X" placeholder="The total count of checking data" name="tb40X">
+            </div>     
+            <div class="form-group">
+                <label for="eb40X">error bucket(count):</label>
+                <input type="text" class="form-control alertnumber" id="eb40X" placeholder="The error count of total" name="eb40X">
+            </div>
+             <div class="form-group">
+                 <label for="threshold40X">threshold(count):</label>
+                 <input type="text" class="form-control alertnumber" id="threshold40X" placeholder="The max count of 40X" name="threshold40X">
+            </div>   
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h6><input type="checkbox"  class='alertcheckbox' id="alert50X">&nbsp;Status code:50X</h6>
+        </div>
+       	<div id ='alert50X-body' class="card-body"> 
+            <div class="form-group">
+                <label for="tb50X">check interval(minutes):</label>
+                <select id = "interval50X" class="form-control interval">
+                            <option value="">---checkpoint---</option>
+                            <option value="2">2</option>
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                    </select>
+            </div>     
+            <div class="form-group">
+                <label for="tb50X">total bucket(count):</label>
+                <input type="text" class="form-control alertnumber" id="tb50X" placeholder="The total count of checking data" name="tb50X">
+            </div>     
+            <div class="form-group">
+                <label for="eb50X">error bucket(count):</label>
+                <input type="text" class="form-control alertnumber" id="eb50X" placeholder="The error count of total" name="eb50X">
+            </div>
+            <div class="form-group">
+                <label for="threshold50X">threshold(count):</label>
+                <input type="text" class="form-control alertnumber" id="threshold50X" placeholder="The max count of 50X" name="threshold50X">
+            </div>      
+        </div>
+    </div>
+
+     <div class="card">
+        <div class="card-header">
+            <h6><input type="checkbox"  class='alertcheckbox' id="alert20030X">&nbsp;Status code:Not 200/30X(down)</h6>
+        </div>
+       	<div id ='alert20030X-body' class="card-body"> 
+            <div class="form-group">
+                <label for="interval20030X">check interval(minutes):</label>
+                <select id = "interval20030X" class="form-control interval" title="---checkpoint---">
+                            <option value="2">2</option>
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                </select>
+            </div> 
+            <div class="form-group">
+                <label for="tb50X">alert(down more than times):</label>
+                <input type="text" class="form-control alertnumber" id="at20030X" placeholder="The total of down more than " name="at20030X" required>
+            </div>     
+            <div class="form-group">
+                <label for="tb50X">recovery(down less than times):</label>
+                <input type="text" class="form-control alertnumber" id="rt20030X" placeholder="The total of less more than" name="rt20030X" required>
+            </div>     
+            <div class="form-group">
+                <label for="eb50X">bucket(count):</label>
+                <input type="text" class="form-control alertnumber" id="tb20030X" placeholder="The total count of checking data" name="tb20030X">
+            </div>    
+        </div>
+    </div>
+
+    <div class="form-group text-center">
+        <button  type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id = "gobalalert_commit">Commit</button>
+    </div>
+        <div class="form-group text-center">
+            <p id ='alertsaveinfo'></p>
+        </div>
+         
+</form>

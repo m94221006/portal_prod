@@ -1,0 +1,62 @@
+{% load static %}
+<script type="text/javascript">
+    $(function () {
+         $( "#Userlogin" ).on( "submit", function( e ) {
+            var username = $('#username').val();
+            var password = $('#password').val();
+            $.post("overview/login/",{'username': username,'password':password},function(res){
+                if(res.status_code == 200){
+                    gusername = username;
+                    gtoken = res.token;
+                    infostore('userinfo',gtoken,username,res.expire);
+                    getContent();	   
+                }
+                else
+                {
+                    console.log(res.message);
+                    $("#userinfo").html("<span class='text-warning'>"+res.message+" <span>");
+                }
+            })
+            e.preventDefault();
+         })
+       
+    });
+    function infostore(key,token,user,expire) {
+        let obj = {
+            username:user,
+            token:token,
+            time:new Date().getTime(),
+            expire:expire,
+        }
+        let objStr = JSON.stringify(obj);
+        localStorage.setItem(key,objStr);
+    }
+</script>
+
+<div class="container">
+    <div class="card card-container">
+        <img id="profile-img" class="profile-img-card" src="{% static "images/head.png" %}"  />
+        <p id="profile-name" class="profile-name-card"></p>
+            <h4 class="card-title text-center mb-4 mt-1">Sign in</h4>
+            <hr>
+        <form id='Userlogin'>
+            <div class="input-group form-group">
+                <div class="input-group-prepend">
+                    <span class="input-group-text"><i class="fas fa-user"></i></span>
+                </div>
+                <input type="text" class="form-control" name="username" id="username" placeholder="User name">
+            </div>
+            <div class="input-group form-group">
+                <div class="input-group-prepend">
+                    <span class="input-group-text"><i class="fas fa-key"></i></span>
+                </div>
+                <input type="password" name="password" id="password" class="form-control" placeholder="******">
+            </div>
+            <div class="input-group form-group">
+                    <button type="submit" class="btn btn-primary btn-block" id='userlogin'> Login </button>
+            </div>
+            
+            <p id='userinfo'></p>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,139 @@
+<script type="text/javascript">
+        var loadinghtml = '<div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div>';
+        $(document).ready(function () {        
+           var detailbutton = '<button class="btn btn-light" id="showalertdetail"><li class="fa fa-plus"></li></button>'
+           var table = $('#malert_table').DataTable({
+                responsive: true,
+                "oLanguage": {
+                "sLengthMenu": "每頁顯示 _MENU_ 條",
+                "sProcessing": "<img src='" + loadinghtml + "'/><span>&nbsp;&nbsp;Loading...</span>",
+                "sInfo": "從 _START_ 到 _END_, 共 _TOTAL_ 條記錄",
+                "sInfoEmpty": "",
+                "sGroupActions": "_TOTAL_ records selected:  ",
+                "sAjaxRequestGeneralError": "未能連線伺服器，請重試！",
+                "sEmptyTable": "未找到相關記錄",
+                "sZeroRecords": "共 0 條記錄",
+                "sInfoFiltered": "(從 _MAX_ 條資料中檢索)",
+                "oPaginate": {
+                    "sPrevious": "上一頁",
+                    "sNext": "下一頁",
+                    "sPage": "頁",
+                    "sPageOf": "of"
+                },
+                "sSearch": "搜尋",
+            },
+            "bFilter": false, //搜尋欄
+            "fnInitComplete": function (oSettings, json) {  //datatables初始化完畢後回撥方法
+                         
+            },
+            
+            'columnDefs': 
+            [
+                {'targets': 0,"data": null,"defaultContent": detailbutton, "className": 'details-control','searchable': false,'orderable': false},
+                
+            ],
+             order: [[ 1, 'asc' ]]
+            });
+
+           $('#malert_table tbody').on( 'click', 'button', function () {
+              var tr = $(this).parents('tr');
+              var row = table.row( tr );
+              var id = row.id();
+              var button_id = $(this).attr("id");
+              var data = row.data();
+              if (button_id == 'showalertdetail'){
+                  show_alert_detail(row,tr,id);
+              }
+            } )          
+        })
+        function show_alert_detail(row,tr,id)
+        {
+              if ( row.child.isShown() ) {
+                  // This row is already open - close it
+                  row.child.hide();
+                  tr.removeClass('shown');
+              }
+              else {
+                  row.child(loadinghtml).show();
+                  tr.addClass('shown');
+                  var showtable ='<table id="alertdetailtable_'+id+'" class="table table-bordered" width="100%" cellspacing="0">'+
+                                 '<thead><tr><th>Url</th><th>Comment</th><th>Mail Receipt</th></tr></thead><tbody></tbody></table>';
+                  //var detail_url = "monitor/Config_Detail";
+                  //var data = {'config_id':config_id};
+                  //$.get(detail_url, data , function(res) {
+                  row.child(showtable).show(); 
+                  $('#alertdetailtable_'+id+' tr:last').after('<tr><td>http://www.google.com<br/>http://www.youtube.com<br/>http://www.stackoverflow.com</td><td>montor for testing</td><td>ricky.wang@letronlab.com;noc@letronlab.com</td></tr>');
+                  //});
+
+              }
+        }
+
+</script>
+<style type="text/css">
+</style>
+
+<div class="container-fluid">
+    <div id ="alertconfig_content" class="table-responsive">
+        <table id = 'malert_table' class="table table-bordered" width="100%" cellspacing="0">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Type</th>
+                    <th>Title</th>
+                    <th>Interval(minute)</th>
+                    <th>Status</th>
+                    <th>check count</th>
+                    <th>Check item</th>
+                </tr>
+           </thead>
+            <tboby>
+                    <tr id = '1'>
+                        <td></td>
+                        <td>http</td>
+                        <td>http monitor alert for testing 1</td>
+                        <td>2</td>
+                        <td>running</td>
+                        <td>10</td>
+                        <td>status = down</td>
+                    </tr>
+                    <tr id = '2'>
+                        <td></td>
+                        <td>http</td>
+                        <td>http monitor alert for testing 2</td>
+                        <td>5</td>
+                        <td>stop</td>
+                        <td>10</td>
+                        <td>status_code != 200</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>http</td>
+                        <td>http monitor alert for testing 3</td>
+                        <td>5</td>
+                        <td>running</td>
+                        <td>10</td>
+                        <td>rtt > 10</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>tcp</td>
+                        <td>tcp monitor alert for testing 1</td>
+                        <td>2</td>
+                        <td>running</td>
+                        <td>5</td>
+                        <td>status = down</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>icmp</td>
+                        <td>icmp monitor alert for testing 1</td>
+                        <td>2</td>
+                        <td>running</td>
+                        <td>5</td>
+                        <td>status = down</td>
+                    </tr>
+            </tboby>    
+        </table>
+
+    </div> 
+</div>
