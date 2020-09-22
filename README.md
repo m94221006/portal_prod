@@ -21,26 +21,28 @@ Topics:
 ## Introduction
 
 ### Looking glass ###
-This api is to use the JWT Token to make the authentication:
-python jwt authentication example: 
-
-```python
-apihost = 'https://127.0.0.1:8080/api-token-auth/'
-data = {"username": username, "password": password}
-header = {"Content-Type": "application/x-www-form-urlencoded"}
-res = requests.post(apihost, data=data, headers=header)
-token = res.json()['token']
-```
-
-### Monitor deploy to node  ###
-Once you get the jwt token that you could use to access operation data api.
-api get data with jwt token example :
-```python
-header = {'Authorization':'JWT {}'.format(token),'Content-type':'application/json'}
-get_url = "{}api/customer/{}".format(self.apihost,cid)
-res = requests.get(get_url, headers=header, timeout=20)
-data =  res.json()
-```
+ Looking Glass provides following tools for real-time testing from 100+ locations.
+  1. curl domain
+  1. Tcping ip
+  1. ping ip
+  1. nslookup dns
+  1. dig dns
+  1. MTR ip
+  1. HAR domain
+  1. websocket domain
+  
+ Introduction:
+ https://www.letrontech.com/looking-glass-testing-tool
+ 
+ could see the demo video.
+ 
+ Testing Site:
+ Url: http://demo.letronlab.com:8089/
+ Username: demouser
+ Password: d@m02020!
+ 
+ example:
+ curl/har http://www.baidu.com/ to test
 
 ## Run and Testing?
 step 1.build images
