@@ -285,6 +285,29 @@ class lg_operation_api(object):
             return None
 
     ########## get instance and htconfig ##########
+    def get_All_instances(self,token,instances_id):
+        try:
+            datalist = list()
+            header = {'Authorization':'JWT {}'.format(token),'Content-type':'application/json'}
+            get_url = "{}api/instance/get_all_instances/".format(self.apihost)
+            res = requests.get(get_url, headers=header, timeout=20)
+            data =  res.json()
+            if data:
+                for item in data:
+                    #log.logger.info("[get all instances]{} {}".format(item['id'],item['host_name'])) 
+                    datalist.append(Instance(item['id'],item['nid'],item['host_name'],item['region_name'],item['isp_name'],item['ch_name'],item['host_ip'],item['status_name']))
+                if instances_id:
+                    datalist = [item for item in datalist if item.id in instances_id]
+                #for item in datalist:
+                    #log.logger.info("[get all instances]{} {}".format(item.id,item.host_name))
+                return datalist
+            else:
+                return None
+        except Exception as e:
+            message =  "Exception : "+ str(e)
+            print(message)
+            return None
+
     def get_instances(self,token,instances_id):
         try:
             datalist = list()

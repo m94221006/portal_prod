@@ -276,7 +276,7 @@ def lg_task(request):
             customer =  api.get_customerinfo(token,userpofile.customer_id)
             user_id = userpofile.user_id
 
-            tasklist = Task.objects.filter(uid = user_id )
+            tasklist = Task.objects.filter(uid = user_id ,enabled = True)
             taskcount = len(tasklist.filter(enabled = True).exclude(status__name ='Completed'))
             context_dict ={'user_id': user_id,'task_list':tasklist, 'task_count':taskcount}
             response = render_to_response('lookglass/task/index.html',context_dict)
@@ -295,12 +295,16 @@ def lg_task_instances(request):
         task_id = int(request.GET['id'])
         task = Task.objects.get(id = task_id)
         api =  lg_operation_api(operapihost)
+        nodelist = api.get_All_instances(token,None)
+       
         if task:
             message = ""
             instance_list =  task.nodes.split(';')
             for instance_id in instance_list:
-                node =  api.get_instance(token,instance_id)
-                message = message + node.ch_name+","
+                node = [item for item in nodelist if item.id == int(instance_id)]
+                if node:
+                #node =  api.get_All_instances(token,instance_id)
+                   message = message + node[0].ch_name+","
 
             response_data['command'] = task.command
             response_data['command_host'] = task.command_host
