@@ -115,6 +115,6 @@ bootstrap_admin==0.4.0
 jsonfield==2.0.2
 #logging==0.4.9.6
 django-celery-beat==1.4.0
-pyyaml== 5.1.0
+pyyaml== 5.4
 http_parser
 #django_json_widget
