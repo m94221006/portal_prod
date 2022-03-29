@@ -83,7 +83,7 @@ python-dateutil==2.7.3
 pytz==2018.5
 pyzmq==17.1.2
 pycrypto==2.6.1
-paramiko==2.6.0
+paramiko==2.10.1
 qtconsole==4.4.1
 redis==2.10.6
 requests==2.20.0
